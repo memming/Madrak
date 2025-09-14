@@ -51,17 +51,43 @@ export class AuthManager {
    */
   async completeAuth(token: string): Promise<LastFmSession> {
     try {
+      log('info', 'Starting authentication completion', { 
+        tokenLength: token?.length || 0,
+        tokenPreview: token ? `${token.substring(0, 10)}...` : 'EMPTY'
+      });
+      
+      log('info', 'Calling Last.fm API to complete authentication');
       const session = await this.api.completeAuth(token);
+      
+      log('info', 'Last.fm API returned session', { 
+        hasSession: !!session,
+        sessionName: session?.name || 'UNKNOWN',
+        hasKey: !!session?.key
+      });
+      
+      log('info', 'Saving session to storage');
       await this.saveSession(session);
       
       // Get user info and save it
+      log('info', 'Getting user info from Last.fm API');
       const user = await this.api.getUserInfo();
+      
+      log('info', 'Last.fm API returned user info', { 
+        hasUser: !!user,
+        userName: user?.name || 'UNKNOWN',
+        playcount: user?.playcount || 0
+      });
+      
+      log('info', 'Saving user info to storage');
       await this.saveUser(user);
       
       log('info', 'Authentication completed successfully');
       return session;
     } catch (error) {
-      log('error', 'Failed to complete authentication:', error);
+      log('error', 'Failed to complete authentication', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   }

@@ -89,10 +89,14 @@ class BackgroundService {
   /**
    * Handle messages from content scripts and popup
    */
-  private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
+  private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean {
     log('info', 'Received message:', message.type);
 
     switch (message.type) {
+      case 'PING':
+        // Respond to ping to keep service worker active
+        sendResponse({ success: true, pong: true });
+        return false; // Response sent synchronously
       case MESSAGE_TYPES.TRACK_DETECTED:
         this.handleTrackDetected(message.data);
         break;
@@ -110,19 +114,22 @@ class BackgroundService {
         break;
       case MESSAGE_TYPES.START_AUTH:
         this.handleStartAuth(sendResponse);
-        break;
+        return true; // Response will be sent asynchronously
+      case MESSAGE_TYPES.COMPLETE_AUTH:
+        this.handleCompleteAuth(message.data, sendResponse);
+        return true; // Response will be sent asynchronously
       case MESSAGE_TYPES.LOGOUT:
         this.handleLogout();
         break;
       case MESSAGE_TYPES.GET_QUEUE_STATS:
         this.handleGetQueueStats(sendResponse);
-        break;
+        return true; // Response will be sent asynchronously
       case MESSAGE_TYPES.GET_DEBUG_INFO:
         this.handleGetDebugInfo(sendResponse);
-        break;
+        return true; // Response will be sent asynchronously
       case MESSAGE_TYPES.EXPORT_LOGS:
         this.handleExportLogs(sendResponse);
-        break;
+        return true; // Response will be sent asynchronously
       case MESSAGE_TYPES.CLEAR_ALL_DATA:
         this.handleClearAllData();
         break;
@@ -130,13 +137,9 @@ class BackgroundService {
         log('warn', 'Unknown message type:', message.type);
     }
 
-    // Only send response if not already sent
-    if (message.type !== MESSAGE_TYPES.START_AUTH && 
-        message.type !== MESSAGE_TYPES.GET_QUEUE_STATS && 
-        message.type !== MESSAGE_TYPES.GET_DEBUG_INFO && 
-        message.type !== MESSAGE_TYPES.EXPORT_LOGS) {
-      sendResponse({ success: true });
-    }
+    // Send response for synchronous messages
+    sendResponse({ success: true });
+    return false; // Response sent synchronously
   }
 
   /**
@@ -351,29 +354,177 @@ class BackgroundService {
   }
 
   /**
-   * Handle start authentication request
+   * Handle start authentication request using Chrome identity API
    */
   private async handleStartAuth(sendResponse: (response?: any) => void): Promise<void> {
     try {
-      console.log('[Madrak] Background: Starting authentication flow');
-      log('info', 'Starting authentication flow');
+      console.log('[Madrak] Background: Starting Chrome identity authentication flow');
+      log('info', 'Starting Chrome identity authentication flow');
       
-      const authUrl = await this.authManager.startAuth();
-      
-      console.log('[Madrak] Background: Generated auth URL:', authUrl);
-      
-      if (authUrl) {
-        log('info', 'Authentication URL generated:', authUrl);
-        sendResponse({ success: true, authUrl });
-      } else {
-        console.error('[Madrak] Background: Failed to generate authentication URL');
-        log('error', 'Failed to generate authentication URL');
-        sendResponse({ success: false, error: 'Failed to generate authentication URL' });
+      // Check if chrome.identity is available
+      if (typeof chrome === 'undefined' || !chrome.identity) {
+        console.error('[Madrak] Background: chrome.identity not available');
+        log('error', 'chrome.identity API not available');
+        sendResponse({ success: false, error: 'Chrome identity API not available' });
+        return;
       }
+      
+      // Generate auth URL
+      const authUrl = this.authManager.getApi().getAuthUrl();
+      console.log('[Madrak] Background: Generated auth URL:', authUrl);
+      log('info', 'Generated authentication URL for Chrome identity flow', { authUrl });
+      
+      // Launch Chrome identity web auth flow
+      chrome.identity.launchWebAuthFlow(
+        {
+          url: authUrl,
+          interactive: true
+        },
+        async (redirectUrl) => {
+          try {
+            if (chrome.runtime.lastError) {
+              console.error('[Madrak] Background: Chrome identity error:', chrome.runtime.lastError);
+              log('error', 'Chrome identity authentication failed', { error: chrome.runtime.lastError });
+              sendResponse({ success: false, error: chrome.runtime.lastError.message });
+              return;
+            }
+            
+            if (!redirectUrl) {
+              console.error('[Madrak] Background: No redirect URL received');
+              log('error', 'No redirect URL received from Chrome identity');
+              sendResponse({ success: false, error: 'No redirect URL received' });
+              return;
+            }
+            
+            console.log('[Madrak] Background: Received redirect URL:', redirectUrl);
+            log('info', 'Received redirect URL from Chrome identity', { redirectUrl });
+            
+            // Extract token from redirect URL
+            const url = new URL(redirectUrl);
+            const token = url.searchParams.get('token');
+            
+            if (!token) {
+              console.error('[Madrak] Background: No token found in redirect URL');
+              log('error', 'No token found in redirect URL', { redirectUrl });
+              sendResponse({ success: false, error: 'No token found in redirect URL' });
+              return;
+            }
+            
+            console.log('[Madrak] Background: Found token, completing authentication');
+            log('info', 'Found token in redirect URL, completing authentication', { 
+              tokenLength: token.length,
+              tokenPreview: token.substring(0, 10) + '...'
+            });
+            
+            // Complete authentication
+            const session = await this.authManager.completeAuth(token);
+            
+            console.log('[Madrak] Background: Authentication completed successfully');
+            log('info', 'Authentication completed successfully', { 
+              username: session.name,
+              sessionKey: session.key ? '[PRESENT]' : '[MISSING]'
+            });
+            
+            // Initialize scrobbler with new session
+            if (this.settings) {
+              this.scrobbler = new Scrobbler(this.authManager.getApi(), this.settings);
+              await this.scrobbler.initialize();
+              console.log('[Madrak] Background: Scrobbler initialized successfully');
+              log('info', 'Scrobbler initialized with authenticated session');
+            }
+            
+            sendResponse({ success: true, session });
+            
+          } catch (error) {
+            console.error('[Madrak] Background: Failed to complete authentication:', error);
+            log('error', 'Failed to complete authentication', { error });
+            sendResponse({ 
+              success: false, 
+              error: error instanceof Error ? error.message : 'Failed to complete authentication' 
+            });
+          }
+        }
+      );
+      
     } catch (error) {
       console.error('[Madrak] Background: Failed to start authentication:', error);
-      log('error', 'Failed to start authentication:', error);
-      sendResponse({ success: false, error: 'Failed to start authentication' });
+      log('error', 'Failed to start authentication', { error });
+      sendResponse({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to start authentication' 
+      });
+    }
+  }
+
+  /**
+   * Handle complete authentication request
+   */
+  private async handleCompleteAuth(data: any, sendResponse: (response?: any) => void): Promise<void> {
+    try {
+      console.log('[Madrak] Background: Starting authentication completion process');
+      log('info', 'Starting authentication completion process', { 
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : []
+      });
+      
+      const token = data?.token;
+      console.log('[Madrak] Background: Token received:', token ? `${token.substring(0, 10)}...` : 'EMPTY');
+      
+      if (!token) {
+        console.error('[Madrak] Background: No token provided for authentication');
+        log('error', 'No token provided for authentication');
+        sendResponse({ success: false, error: 'No token provided' });
+        return;
+      }
+      
+      if (typeof token !== 'string' || token.trim().length === 0) {
+        console.error('[Madrak] Background: Invalid token format:', typeof token, token.length);
+        log('error', 'Invalid token format', { tokenType: typeof token, tokenLength: token.length });
+        sendResponse({ success: false, error: 'Invalid token format' });
+        return;
+      }
+      
+      console.log('[Madrak] Background: Token validation passed, calling authManager.completeAuth');
+      log('info', 'Token validation passed, proceeding with authentication', {
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 10) + '...'
+      });
+      
+      // Complete authentication using the token
+      const session = await this.authManager.completeAuth(token.trim());
+      
+      console.log('[Madrak] Background: Authentication completed successfully');
+      log('info', 'Authentication completed successfully', { 
+        username: session.name,
+        sessionKey: session.key ? '[PRESENT]' : '[MISSING]',
+        sessionName: session.name || 'UNKNOWN'
+      });
+      
+      // Initialize scrobbler with new session
+      console.log('[Madrak] Background: Initializing scrobbler with new session');
+      if (this.settings) {
+        this.scrobbler = new Scrobbler(this.authManager.getApi(), this.settings);
+        await this.scrobbler.initialize();
+        console.log('[Madrak] Background: Scrobbler initialized successfully');
+        log('info', 'Scrobbler initialized with authenticated session');
+      } else {
+        console.warn('[Madrak] Background: No settings available for scrobbler initialization');
+        log('warn', 'No settings available for scrobbler initialization');
+      }
+      
+      console.log('[Madrak] Background: Sending success response to popup');
+      sendResponse({ success: true, session });
+      
+    } catch (error) {
+      console.error('[Madrak] Background: Failed to complete authentication:', error);
+      log('error', 'Failed to complete authentication', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      sendResponse({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to complete authentication' 
+      });
     }
   }
 
@@ -392,6 +543,7 @@ class BackgroundService {
       log('error', 'Failed to logout:', error);
     }
   }
+
 
   /**
    * Handle get queue stats request
@@ -475,7 +627,7 @@ const backgroundService = new BackgroundService();
 
 // Set up event listeners
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  backgroundService['handleMessage'](message, sender, sendResponse);
+  return backgroundService['handleMessage'](message, sender, sendResponse);
 });
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -483,9 +635,11 @@ chrome.runtime.onInstalled.addListener((details) => {
   backgroundService['createContextMenu']();
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  backgroundService['handleTabUpdated'](tabId, changeInfo, tab);
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  backgroundService['handleTabUpdated'](_tabId, changeInfo, tab);
 });
+
+// Note: Authentication callback handling removed - now using manual token entry
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   backgroundService['handleTabActivated'](activeInfo);

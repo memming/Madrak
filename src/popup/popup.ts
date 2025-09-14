@@ -29,6 +29,9 @@ class PopupController {
       // Set up event listeners
       this.setupEventListeners();
       
+      // Set up message listeners
+      this.setupMessageListeners();
+      
       // Update UI
       this.updateUI();
       
@@ -120,6 +123,234 @@ class PopupController {
       e.preventDefault();
       this.handleFeedback();
     });
+  }
+
+  /**
+   * Set up message listeners for background communication
+   */
+  private setupMessageListeners(): void {
+    chrome.runtime.onMessage.addListener((message: Message, _sender, _sendResponse) => {
+      console.log('[Madrak] Popup received message:', message.type);
+      
+      switch (message.type) {
+        case 'AUTH_SUCCESS':
+          this.handleAuthSuccess(message.data);
+          break;
+        case 'AUTH_ERROR':
+          this.handleAuthError(message.data);
+          break;
+        default:
+          console.log('[Madrak] Popup: Unknown message type:', message.type);
+      }
+    });
+  }
+
+  /**
+   * Handle successful authentication
+   */
+  private async handleAuthSuccess(data: any): Promise<void> {
+    try {
+      console.log('[Madrak] Popup: Authentication successful', data);
+      log('info', 'Authentication successful in popup', data);
+      
+      // Reload data to get updated user info
+      await this.loadData();
+      
+      // Update UI to show authenticated state
+      this.updateUI();
+      
+      // Show success message
+      this.showSuccess('Successfully connected to Last.fm!');
+      
+    } catch (error) {
+      console.error('[Madrak] Popup: Failed to handle auth success:', error);
+      log('error', 'Failed to handle authentication success:', error);
+    }
+  }
+
+  /**
+   * Handle authentication error
+   */
+  private handleAuthError(data: any): void {
+    try {
+      console.error('[Madrak] Popup: Authentication failed', data);
+      log('error', 'Authentication failed in popup', data);
+      
+      const errorMessage = data?.error || 'Authentication failed';
+      this.showError(`Authentication failed: ${errorMessage}`);
+      
+    } catch (error) {
+      console.error('[Madrak] Popup: Failed to handle auth error:', error);
+      log('error', 'Failed to handle authentication error:', error);
+    }
+  }
+
+  /**
+   * Show success message
+   */
+  private showSuccess(message: string): void {
+    // Create a temporary success message
+    const successDiv = document.createElement('div');
+    successDiv.className = 'success-message';
+    successDiv.textContent = message;
+    successDiv.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      background: #4CAF50;
+      color: white;
+      padding: 10px;
+      border-radius: 4px;
+      z-index: 1000;
+      text-align: center;
+    `;
+    
+    document.body.appendChild(successDiv);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      if (successDiv.parentNode) {
+        successDiv.parentNode.removeChild(successDiv);
+      }
+    }, 3000);
+  }
+
+  /**
+   * Show authentication instructions
+   */
+  private showAuthInstructions(): void {
+    // Create instructions modal
+    const modal = document.createElement('div');
+    modal.className = 'auth-instructions-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 400px;
+      margin: 20px;
+    `;
+    
+    content.innerHTML = `
+      <h3>Complete Authentication</h3>
+      <p><strong>Step 1:</strong> Complete the authentication on the Last.fm page that just opened</p>
+      <p><strong>Step 2:</strong> After authentication, you'll be redirected to a page that shows an error (this is normal!)</p>
+      <p><strong>Step 3:</strong> Look at the URL in your browser's address bar - it will contain a token parameter</p>
+      <p><strong>Step 4:</strong> Copy the token from the URL and paste it below</p>
+      
+      <div style="margin: 15px 0; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+        <strong>⚠️ Important:</strong> The callback page will show an error (404, 503, etc.) - this is completely normal! Just look at the URL.
+      </div>
+      
+      <div style="margin: 15px 0; padding: 10px; background: #f0f8ff; border: 1px solid #b3d9ff; border-radius: 4px;">
+        <strong>Example:</strong> If the URL is <code>https://madrak-extension.com/callback?token=abc123xyz</code><br>
+        Copy: <code>abc123xyz</code>
+      </div>
+      
+      <div style="margin: 15px 0;">
+        <input type="text" id="authTokenInput" placeholder="Paste your token here" 
+               style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+      </div>
+      
+      <div style="text-align: right;">
+        <button id="completeAuthBtn" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 10px;">Complete Authentication</button>
+        <button id="cancelAuthBtn" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px;">Cancel</button>
+      </div>
+    `;
+    
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    const completeBtn = document.getElementById('completeAuthBtn');
+    const cancelBtn = document.getElementById('cancelAuthBtn');
+    const tokenInput = document.getElementById('authTokenInput') as HTMLInputElement;
+    
+    completeBtn?.addEventListener('click', () => {
+      const token = tokenInput?.value?.trim();
+      if (token) {
+        this.completeAuthentication(token);
+        document.body.removeChild(modal);
+      } else {
+        alert('Please enter a token');
+      }
+    });
+    
+    cancelBtn?.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+    
+    // Focus the input
+    setTimeout(() => tokenInput?.focus(), 100);
+  }
+
+  /**
+   * Complete authentication with token
+   */
+  private async completeAuthentication(token: string): Promise<void> {
+    try {
+      console.log('[Madrak] Completing authentication with token:', token ? `${token.substring(0, 10)}...` : 'EMPTY');
+      log('info', 'Starting authentication completion', { 
+        tokenLength: token?.length || 0,
+        tokenPreview: token ? `${token.substring(0, 10)}...` : 'EMPTY'
+      });
+      
+      // Validate token format
+      if (!token || token.trim().length === 0) {
+        console.error('[Madrak] Empty token provided');
+        this.showError('Please enter a valid token');
+        return;
+      }
+      
+      if (token.length < 10) {
+        console.error('[Madrak] Token too short:', token.length);
+        this.showError('Token appears to be too short. Please check and try again.');
+        return;
+      }
+      
+      console.log('[Madrak] Token validation passed, sending to background script');
+      
+      // Send token to background script for processing
+      const response = await this.sendMessageToBackground({
+        type: 'COMPLETE_AUTH',
+        data: { token: token.trim() }
+      });
+      
+      console.log('[Madrak] Received response from background:', response);
+      
+      if (response?.success) {
+        console.log('[Madrak] Authentication completed successfully');
+        log('info', 'Authentication completed successfully in popup');
+        this.showSuccess('Successfully connected to Last.fm!');
+        
+        // Reload data and update UI
+        console.log('[Madrak] Reloading user data and updating UI');
+        await this.loadData();
+        this.updateUI();
+      } else {
+        console.error('[Madrak] Authentication failed:', response?.error);
+        log('error', 'Authentication failed in popup', { error: response?.error });
+        this.showError(`Authentication failed: ${response?.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('[Madrak] Failed to complete authentication:', error);
+      log('error', 'Failed to complete authentication in popup', { error });
+      this.showError('Failed to complete authentication');
+    }
   }
 
   /**
@@ -387,6 +618,19 @@ class PopupController {
   private async handleConnect(): Promise<void> {
     try {
       console.log('[Madrak] Connect button clicked');
+      log('info', 'Connect button clicked in popup', { 
+        isAuthenticated: this.isAuthenticated,
+        hasUser: !!this.user,
+        hasSettings: !!this.settings
+      });
+      
+      // Check if already authenticated
+      if (this.isAuthenticated) {
+        console.log('[Madrak] User is already authenticated, showing main section');
+        this.showMainSection();
+        this.updateUI();
+        return;
+      }
       
       const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
       if (connectButton) {
@@ -395,6 +639,10 @@ class PopupController {
       }
 
       console.log('[Madrak] Sending START_AUTH message to background');
+      log('info', 'Sending START_AUTH message to background script');
+      
+      // Ensure service worker is active before sending message
+      await this.ensureServiceWorkerActive();
       
       // Start authentication flow
       const response = await this.sendMessageToBackground({
@@ -402,19 +650,47 @@ class PopupController {
       });
 
       console.log('[Madrak] Received response from background:', response);
+      log('info', 'Received response from background script', { response });
 
-      if (response?.authUrl) {
-        console.log('[Madrak] Opening authentication URL:', response.authUrl);
-        // Open authentication URL
-        await chrome.tabs.create({ url: response.authUrl });
+      if (response?.success) {
+        console.log('[Madrak] Authentication completed successfully');
+        log('info', 'Authentication completed successfully in popup');
+        this.showSuccess('Successfully connected to Last.fm!');
+        
+        // Reload data and update UI
+        console.log('[Madrak] Reloading user data and updating UI');
+        await this.loadData();
+        this.updateUI();
       } else {
-        console.error('[Madrak] No auth URL received:', response);
-        this.showError('Failed to get authentication URL');
+        console.error('[Madrak] Authentication failed:', response?.error);
+        log('error', 'Authentication failed in popup', { error: response?.error });
+        this.showError(`Authentication failed: ${response?.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('[Madrak] Failed to start authentication:', error);
-      log('error', 'Failed to start authentication:', error);
-      this.showError('Failed to start authentication');
+      
+      let errorMessage = 'Unknown error';
+      let errorDetails = '';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        errorDetails = error.stack || '';
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        errorMessage = (error as any).message || error.toString() || 'Object error';
+        errorDetails = JSON.stringify(error, null, 2);
+      } else {
+        errorMessage = String(error);
+      }
+      
+      console.error('[Madrak] Error details:', errorDetails);
+      log('error', 'Failed to start authentication:', { 
+        error: errorMessage, 
+        details: errorDetails,
+        originalError: error 
+      });
+      this.showError(`Failed to start authentication: ${errorMessage}`);
     } finally {
       const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
       if (connectButton) {
@@ -681,18 +957,64 @@ class PopupController {
   }
 
   /**
+   * Ensure service worker is active before sending message
+   */
+  private async ensureServiceWorkerActive(): Promise<void> {
+    try {
+      // Send a ping message to wake up the service worker
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage({ type: 'PING' }, () => {
+          if (chrome.runtime.lastError) {
+            // If ping fails, that's okay - we'll try the actual message anyway
+            console.log('[Madrak] Service worker ping failed, proceeding anyway');
+          }
+          resolve();
+        });
+      });
+    } catch (error) {
+      // Ignore ping errors, proceed with actual message
+      console.log('[Madrak] Service worker ping error, proceeding anyway');
+    }
+  }
+
+  /**
    * Send message to background script
    */
   private async sendMessageToBackground(message: Message): Promise<any> {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve(response);
-        }
+    const maxRetries = 3;
+    let retryCount = 0;
+
+    const attemptSend = (): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError) {
+            const error = chrome.runtime.lastError;
+            console.error('[Madrak] Message port error (attempt ' + (retryCount + 1) + '):', error);
+            
+            // Handle specific message port errors
+            if (error.message?.includes('message port closed') && retryCount < maxRetries) {
+              retryCount++;
+              console.log('[Madrak] Service worker may be sleeping, retrying in 200ms... (attempt ' + retryCount + '/' + maxRetries + ')');
+              
+              // Wake up service worker first
+              chrome.runtime.sendMessage({ type: 'PING' }, () => {
+                // Wait a bit longer for service worker to wake up
+                setTimeout(() => {
+                  attemptSend().then(resolve).catch(reject);
+                }, 200);
+              });
+            } else {
+              reject(new Error(`Service worker unavailable after ${retryCount} retries: ${error.message}`));
+            }
+          } else {
+            console.log('[Madrak] Message sent successfully, response received');
+            resolve(response);
+          }
+        });
       });
-    });
+    };
+
+    return attemptSend();
   }
 
   /**

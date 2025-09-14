@@ -370,7 +370,18 @@ export function log(level: LogLevel, message: string, contextOrArg?: any, ...arg
       consoleArgs.push('Context:', context);
     }
     if (logArgs.length > 0) {
-      consoleArgs.push(...logArgs);
+      // Convert error objects to readable strings
+      const processedArgs = logArgs.map(arg => {
+        if (arg instanceof Error) {
+          return {
+            message: arg.message,
+            stack: arg.stack,
+            name: arg.name
+          };
+        }
+        return arg;
+      });
+      consoleArgs.push(...processedArgs);
     }
     
     switch (level) {

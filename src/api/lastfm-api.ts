@@ -230,24 +230,45 @@ export class LastFmApi {
   }
 
   /**
-   * Get authentication URL
+   * Get authentication URL for Chrome identity flow
    */
   getAuthUrl(): string {
     try {
+      debug('Getting authentication URL for Chrome identity flow', {
+        hasChromeIdentity: typeof chrome !== 'undefined' && !!chrome.identity,
+        apiKey: this.apiKey ? '[PRESENT]' : '[MISSING]',
+        authEndpoint: LASTFM_API_ENDPOINTS.AUTH
+      });
+
+      // Use Chrome's redirect URL for OAuth
+      let callbackUrl = 'https://madrak-extension.com/callback';
+      
+      if (typeof chrome !== 'undefined' && chrome.identity) {
+        try {
+          callbackUrl = chrome.identity.getRedirectURL();
+          debug('Using Chrome identity redirect URL', { callbackUrl });
+        } catch (identityError) {
+          debug('Failed to get Chrome redirect URL, using fallback', { error: identityError });
+        }
+      }
+
       const params = {
         api_key: this.apiKey,
-        cb: chrome.identity?.getRedirectURL() || 'https://madrak-extension.com/auth/callback',
+        cb: callbackUrl,
       };
-      
-      return `${LASTFM_API_ENDPOINTS.AUTH}?${createQueryString(params)}`;
-    } catch (error) {
-      // Fallback if chrome.identity is not available
-      const params = {
-        api_key: this.apiKey,
-        cb: 'https://madrak-extension.com/auth/callback',
-      };
-      
-      return `${LASTFM_API_ENDPOINTS.AUTH}?${createQueryString(params)}`;
+
+      const queryString = createQueryString(params);
+      const authUrl = `${LASTFM_API_ENDPOINTS.AUTH}?${queryString}`;
+
+      debug('Generated authentication URL', {
+        authUrl: authUrl.replace(this.apiKey, '[API_KEY]'),
+        params: { ...params, api_key: '[API_KEY]' }
+      });
+
+      return authUrl;
+    } catch (err) {
+      error('Failed to generate authentication URL', err);
+      throw err;
     }
   }
 

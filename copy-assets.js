@@ -19,6 +19,9 @@ mkdirSync('dist/options', { recursive: true });
 copyFileSync('src/options/options.html', 'dist/options/options.html');
 copyFileSync('src/options/options.css', 'dist/options/options.css');
 
+// Copy callback.html
+copyFileSync('src/callback.html', 'dist/callback.html');
+
 // Copy assets if they exist
 if (existsSync('src/assets')) {
   mkdirSync('dist/assets', { recursive: true });
