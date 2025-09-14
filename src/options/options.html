@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last.fm Scrobbler - Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="options-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="../assets/icon-32.png" alt="Madrak" class="logo-img">
+                    <h1>Madrak Settings</h1>
+                </div>
+                <div class="header-actions">
+                    <button id="saveButton" class="btn btn-primary">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <div class="settings-grid">
+                <!-- General Settings -->
+                <div class="settings-section">
+                    <h2>General Settings</h2>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="enableScrobbling" class="setting-label">Enable Scrobbling</label>
+                            <p class="setting-description">Automatically scrobble music from YouTube Music to Last.fm</p>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle">
+                                <input type="checkbox" id="enableScrobbling" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="autoScrobble" class="setting-label">Auto Scrobble</label>
+                            <p class="setting-description">Automatically scrobble tracks without manual confirmation</p>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle">
+                                <input type="checkbox" id="autoScrobble" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="showNotifications" class="setting-label">Show Notifications</label>
+                            <p class="setting-description">Display notifications when tracks are scrobbled</p>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle">
+                                <input type="checkbox" id="showNotifications" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scrobbling Settings -->
+                <div class="settings-section">
+                    <h2>Scrobbling Settings</h2>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="minTrackLength" class="setting-label">Minimum Track Length</label>
+                            <p class="setting-description">Minimum duration in seconds for a track to be scrobbled</p>
+                        </div>
+                        <div class="setting-control">
+                            <div class="input-group">
+                                <input type="number" id="minTrackLength" min="1" max="600" value="30" class="input">
+                                <span class="input-suffix">seconds</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="scrobbleThreshold" class="setting-label">Scrobble Threshold</label>
+                            <p class="setting-description">Percentage of track that must be played before scrobbling</p>
+                        </div>
+                        <div class="setting-control">
+                            <div class="input-group">
+                                <input type="range" id="scrobbleThreshold" min="10" max="90" value="50" class="slider">
+                                <span class="slider-value" id="scrobbleThresholdValue">50%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Settings -->
+                <div class="settings-section">
+                    <h2>Account Settings</h2>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label class="setting-label">Last.fm Account</label>
+                            <p class="setting-description">Manage your Last.fm account connection</p>
+                        </div>
+                        <div class="setting-control">
+                            <div class="account-info" id="accountInfo">
+                                <div class="account-details">
+                                    <div class="account-avatar">
+                                        <img id="accountAvatar" src="" alt="User Avatar" class="avatar-img">
+                                    </div>
+                                    <div class="account-text">
+                                        <div class="account-name" id="accountName">Not connected</div>
+                                        <div class="account-status" id="accountStatus">Connect your Last.fm account</div>
+                                    </div>
+                                </div>
+                                <button id="accountButton" class="btn btn-outline">Connect</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Settings -->
+                <div class="settings-section">
+                    <h2>Advanced Settings</h2>
+                    
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="debugMode" class="setting-label">Debug Mode</label>
+                            <p class="setting-description">Enable detailed logging for troubleshooting</p>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle">
+                                <input type="checkbox" id="debugMode">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label for="logLevel" class="setting-label">Log Level</label>
+                            <p class="setting-description">Minimum log level to display (debug shows all messages)</p>
+                        </div>
+                        <div class="setting-control">
+                            <select id="logLevel" class="input">
+                                <option value="debug">Debug (All messages)</option>
+                                <option value="info">Info (Default)</option>
+                                <option value="warn">Warning</option>
+                                <option value="error">Error only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label class="setting-label">Clear Data</label>
+                            <p class="setting-description">Clear all stored data and reset the extension</p>
+                        </div>
+                        <div class="setting-control">
+                            <button id="clearDataButton" class="btn btn-danger">Clear All Data</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="settings-section">
+                    <h2>Statistics</h2>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalScrobbles">0</div>
+                            <div class="stat-label">Total Scrobbles</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="queueSize">0</div>
+                            <div class="stat-label">In Queue</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="lastScrobble">Never</div>
+                            <div class="stat-label">Last Scrobble</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="uptime">0h 0m</div>
+                            <div class="stat-label">Uptime</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#" id="helpLink">Help & Support</a>
+                    <a href="#" id="privacyLink">Privacy Policy</a>
+                    <a href="#" id="githubLink">GitHub</a>
+                </div>
+                <div class="version">v1.0.0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="options.js"></script>
+</body>
+</html>

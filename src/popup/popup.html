@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last.fm Scrobbler</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <img src="../assets/icon-32.png" alt="Madrak" class="logo-img">
+                <h1>Madrak</h1>
+            </div>
+            <div class="status-indicator" id="statusIndicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Checking...</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Not Authenticated State -->
+            <div class="auth-section" id="authSection">
+                <div class="auth-content">
+                    <h2>Connect to Last.fm</h2>
+                    <p>Connect your Last.fm account to start scrobbling music from YouTube Music.</p>
+                    <button id="connectButton" class="btn btn-primary">
+                        <span class="btn-text">Connect to Last.fm</span>
+                        <span class="btn-loading" style="display: none;">Connecting...</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Authenticated State -->
+            <div class="main-section" id="mainSection" style="display: none;">
+                <!-- User Info -->
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <img id="userAvatar" src="" alt="User Avatar" class="avatar-img">
+                    </div>
+                    <div class="user-details">
+                        <h3 id="userName">Loading...</h3>
+                        <p id="userPlaycount">0 plays</p>
+                    </div>
+                    <button id="disconnectButton" class="btn btn-secondary btn-small">Disconnect</button>
+                </div>
+
+                <!-- Current Track -->
+                <div class="current-track" id="currentTrackSection" style="display: none;">
+                    <h4>Now Playing</h4>
+                    <div class="track-info">
+                        <div class="track-artwork">
+                            <img id="trackArtwork" src="" alt="Track Artwork" class="artwork-img">
+                        </div>
+                        <div class="track-details">
+                            <div class="track-title" id="trackTitle">Loading...</div>
+                            <div class="track-artist" id="trackArtist">Loading...</div>
+                            <div class="track-album" id="trackAlbum">Loading...</div>
+                        </div>
+                    </div>
+                    <div class="track-status">
+                        <div class="scrobble-status" id="scrobbleStatus">
+                            <span class="status-icon">⏳</span>
+                            <span class="status-text">Detecting track...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="queueCount">0</div>
+                        <div class="stat-label">In Queue</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="scrobbledCount">0</div>
+                        <div class="stat-label">Scrobbled</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="lastScrobble">--</div>
+                        <div class="stat-label">Last Scrobble</div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <button id="pauseButton" class="btn btn-secondary">
+                        <span class="btn-text">Pause Scrobbling</span>
+                    </button>
+                    <button id="settingsButton" class="btn btn-outline">
+                        <span class="btn-text">Settings</span>
+                    </button>
+                    <button id="debugButton" class="btn btn-outline">
+                        <span class="btn-text">Debug</span>
+                    </button>
+                </div>
+
+                <!-- Debug Panel -->
+                <div class="debug-panel" id="debugPanel" style="display: none;">
+                    <div class="debug-header">
+                        <h4>Debug Information</h4>
+                        <div class="debug-controls">
+                            <button id="exportLogsButton" class="btn btn-small">Export Logs</button>
+                            <button id="clearLogsButton" class="btn btn-small btn-danger">Clear Logs</button>
+                            <button id="closeDebugButton" class="btn btn-small">Close</button>
+                        </div>
+                    </div>
+                    <div class="debug-content">
+                        <div class="debug-tabs">
+                            <button class="debug-tab active" data-tab="logs">Recent Logs</button>
+                            <button class="debug-tab" data-tab="errors">Errors</button>
+                            <button class="debug-tab" data-tab="system">System Info</button>
+                        </div>
+                        <div class="debug-tab-content" id="logsTab">
+                            <div class="log-entries" id="logEntries">
+                                <div class="log-entry">
+                                    <span class="log-time">Loading...</span>
+                                    <span class="log-level info">INFO</span>
+                                    <span class="log-message">Loading debug information...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="debug-tab-content" id="errorsTab" style="display: none;">
+                            <div class="log-entries" id="errorEntries">
+                                <div class="log-entry">
+                                    <span class="log-time">Loading...</span>
+                                    <span class="log-level error">ERROR</span>
+                                    <span class="log-message">Loading error information...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="debug-tab-content" id="systemTab" style="display: none;">
+                            <div class="system-info" id="systemInfo">
+                                <div class="info-item">
+                                    <span class="info-label">Loading system information...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div class="error-section" id="errorSection" style="display: none;">
+                <div class="error-content">
+                    <div class="error-icon">⚠️</div>
+                    <h3>Something went wrong</h3>
+                    <p id="errorMessage">An error occurred. Please try again.</p>
+                    <button id="retryButton" class="btn btn-primary">Retry</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-links">
+                <a href="#" id="helpLink">Help</a>
+                <a href="#" id="feedbackLink">Feedback</a>
+            </div>
+            <div class="version">v1.0.0</div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
