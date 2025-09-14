@@ -4,7 +4,7 @@
 
 import { Message, ExtensionSettings, LastFmUser } from '../shared/types';
 import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
-import { getSettings, saveSettings, log, formatDuration, getStoredLogs, exportLogs, clearStoredLogs } from '../shared/utils';
+import { getSettings, saveSettings, log, getStoredLogs } from '../shared/utils';
 import { getDebugInfo, exportDebugLogs, clearDebugLogs } from '../shared/logger';
 
 class PopupController {
@@ -263,13 +263,13 @@ class PopupController {
       if (tabs.length === 0) return;
 
       const tab = tabs[0];
-      if (!tab.url?.includes('music.youtube.com')) {
+      if (!tab?.url?.includes('music.youtube.com')) {
         this.hideCurrentTrack();
         return;
       }
 
       // Send message to content script to get current track
-      if (tab.id) {
+      if (tab?.id) {
         const response = await chrome.tabs.sendMessage(tab.id, {
           type: 'GET_CURRENT_TRACK'
         });
@@ -386,22 +386,33 @@ class PopupController {
    */
   private async handleConnect(): Promise<void> {
     try {
+      console.log('[Madrak] Connect button clicked');
+      
       const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
       if (connectButton) {
         connectButton.classList.add('loading');
         connectButton.disabled = true;
       }
 
+      console.log('[Madrak] Sending START_AUTH message to background');
+      
       // Start authentication flow
       const response = await this.sendMessageToBackground({
         type: 'START_AUTH'
       });
 
+      console.log('[Madrak] Received response from background:', response);
+
       if (response?.authUrl) {
+        console.log('[Madrak] Opening authentication URL:', response.authUrl);
         // Open authentication URL
         await chrome.tabs.create({ url: response.authUrl });
+      } else {
+        console.error('[Madrak] No auth URL received:', response);
+        this.showError('Failed to get authentication URL');
       }
     } catch (error) {
+      console.error('[Madrak] Failed to start authentication:', error);
       log('error', 'Failed to start authentication:', error);
       this.showError('Failed to start authentication');
     } finally {

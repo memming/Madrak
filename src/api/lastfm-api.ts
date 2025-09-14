@@ -2,17 +2,16 @@
  * Last.fm API integration
  */
 
-import { 
-  LastFmApiResponse, 
-  LastFmSession, 
-  LastFmUser, 
-  ScrobbleData, 
+import {
+  LastFmApiResponse,
+  LastFmSession,
+  LastFmUser,
+  ScrobbleData,
   ScrobbleResponse,
-  Track,
-  ApiError 
+  Track
 } from '../shared/types';
-import { LASTFM_API_ENDPOINTS, API_STATUS } from '../shared/constants';
-import { generateMD5, createQueryString, log, debug, info, warn, error, logApiRequest } from '../shared/utils';
+import { LASTFM_API_ENDPOINTS } from '../shared/constants';
+import { generateMD5, createQueryString, log, debug, info, error } from '../shared/utils';
 
 export class LastFmApi {
   private apiKey: string;
@@ -218,11 +217,11 @@ export class LastFmApi {
     try {
       const response = await this.makeRequest<any>('track.scrobble', params, true);
       
-      if (!response.scrobbles) {
+      if (!(response as any).scrobbles) {
         throw new Error('Invalid scrobble response');
       }
 
-      log('info', `Scrobbled ${response.scrobbles['@attr'].accepted} tracks successfully`);
+      log('info', `Scrobbled ${(response as any).scrobbles['@attr'].accepted} tracks successfully`);
       return response as ScrobbleResponse;
     } catch (error) {
       log('error', 'Failed to scrobble tracks:', error);
@@ -234,12 +233,22 @@ export class LastFmApi {
    * Get authentication URL
    */
   getAuthUrl(): string {
-    const params = {
-      api_key: this.apiKey,
-      cb: chrome.identity.getRedirectURL(),
-    };
-    
-    return `${LASTFM_API_ENDPOINTS.AUTH}?${createQueryString(params)}`;
+    try {
+      const params = {
+        api_key: this.apiKey,
+        cb: chrome.identity?.getRedirectURL() || 'https://madrak-extension.com/auth/callback',
+      };
+      
+      return `${LASTFM_API_ENDPOINTS.AUTH}?${createQueryString(params)}`;
+    } catch (error) {
+      // Fallback if chrome.identity is not available
+      const params = {
+        api_key: this.apiKey,
+        cb: 'https://madrak-extension.com/auth/callback',
+      };
+      
+      return `${LASTFM_API_ENDPOINTS.AUTH}?${createQueryString(params)}`;
+    }
   }
 
   /**

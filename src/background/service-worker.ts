@@ -3,8 +3,8 @@
  */
 
 import { Message, Track, ExtensionSettings } from '../shared/types';
-import { MESSAGE_TYPES, STORAGE_KEYS, NOTIFICATION_IDS } from '../shared/constants';
-import { getSettings, saveSettings, log, debug, info, error, showNotification } from '../shared/utils';
+import { MESSAGE_TYPES } from '../shared/constants';
+import { getSettings, log, debug, info, showNotification } from '../shared/utils';
 import { initializeLogger, logSystemInfo } from '../shared/logger';
 import { AuthManager } from '../api/auth';
 import { Scrobbler } from '../api/scrobbler';
@@ -13,11 +13,16 @@ class BackgroundService {
   private authManager: AuthManager;
   private scrobbler: Scrobbler | null = null;
   private settings: ExtensionSettings | null = null;
-  private isInitialized: boolean = false;
+  // Removed unused isInitialized property
 
   constructor() {
     // Initialize with placeholder values - will be updated from settings
-    this.authManager = new AuthManager('', '');
+    // TODO: Replace with your actual Last.fm API credentials
+    // Get them from: https://www.last.fm/api/account/create
+    this.authManager = new AuthManager(
+      'a3720627f403249db395d43df61594df', 
+      'b683267386a4cf8747d6a557da8b305c'
+    );
     this.initialize();
   }
 
@@ -34,6 +39,17 @@ class BackgroundService {
       // Initialize logger with settings
       if (this.settings) {
         initializeLogger(this.settings);
+      } else {
+        // Use default settings if none loaded
+        initializeLogger({
+          isEnabled: true,
+          minTrackLength: 30,
+          autoScrobble: true,
+          showNotifications: true,
+          scrobbleThreshold: 50,
+          debugMode: false,
+          logLevel: 'info'
+        });
       }
       
       // Log system info for debugging
@@ -61,12 +77,11 @@ class BackgroundService {
         debug('User not authenticated, scrobbler not initialized');
       }
       
-      this.isInitialized = true;
       info('Background service initialized successfully');
-    } catch (error) {
-      error('Failed to initialize background service', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+    } catch (err) {
+      log('error', 'Failed to initialize background service', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined
       });
     }
   }
@@ -74,7 +89,7 @@ class BackgroundService {
   /**
    * Handle messages from content scripts and popup
    */
-  private handleMessage(message: Message, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
+  private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
     log('info', 'Received message:', message.type);
 
     switch (message.type) {
@@ -93,24 +108,48 @@ class BackgroundService {
       case MESSAGE_TYPES.SETTINGS_UPDATE:
         this.handleSettingsUpdate(message.data);
         break;
+      case MESSAGE_TYPES.START_AUTH:
+        this.handleStartAuth(sendResponse);
+        break;
+      case MESSAGE_TYPES.LOGOUT:
+        this.handleLogout();
+        break;
+      case MESSAGE_TYPES.GET_QUEUE_STATS:
+        this.handleGetQueueStats(sendResponse);
+        break;
+      case MESSAGE_TYPES.GET_DEBUG_INFO:
+        this.handleGetDebugInfo(sendResponse);
+        break;
+      case MESSAGE_TYPES.EXPORT_LOGS:
+        this.handleExportLogs(sendResponse);
+        break;
+      case MESSAGE_TYPES.CLEAR_ALL_DATA:
+        this.handleClearAllData();
+        break;
       default:
         log('warn', 'Unknown message type:', message.type);
     }
 
-    sendResponse({ success: true });
+    // Only send response if not already sent
+    if (message.type !== MESSAGE_TYPES.START_AUTH && 
+        message.type !== MESSAGE_TYPES.GET_QUEUE_STATS && 
+        message.type !== MESSAGE_TYPES.GET_DEBUG_INFO && 
+        message.type !== MESSAGE_TYPES.EXPORT_LOGS) {
+      sendResponse({ success: true });
+    }
   }
 
   /**
    * Handle track detected message
    */
-  private async handleTrackDetected(data: any): Promise<void> {
+  private async handleTrackDetected(_data: any): Promise<void> {
     try {
       if (!this.scrobbler || !this.settings?.isEnabled) {
         return;
       }
 
-      const track: Track = data.track;
-      const isNowPlaying = data.isNowPlaying || false;
+      const track: Track = _data.track;
+      const isNowPlaying = _data.isNowPlaying || false;
 
       if (isNowPlaying) {
         // Update now playing status
@@ -126,14 +165,14 @@ class BackgroundService {
   /**
    * Handle track ended message
    */
-  private async handleTrackEnded(data: any): Promise<void> {
+  private async handleTrackEnded(_data: any): Promise<void> {
     try {
       if (!this.scrobbler || !this.settings?.isEnabled) {
         return;
       }
 
-      const track: Track = data.track;
-      const playDuration = data.playDuration || 0;
+      const track: Track = _data.track;
+      const playDuration = _data.playDuration || 0;
 
       // Check if track should be scrobbled
       if (this.scrobbler.shouldScrobble(track, playDuration)) {
@@ -158,13 +197,26 @@ class BackgroundService {
   /**
    * Handle authentication success
    */
-  private async handleAuthSuccess(data: any): Promise<void> {
+  private async handleAuthSuccess(_data: any): Promise<void> {
     try {
       log('info', 'Authentication successful');
       
       // Reinitialize scrobbler with authenticated API
       if (this.settings) {
         this.scrobbler = new Scrobbler(this.authManager.getApi(), this.settings);
+        await this.scrobbler.initialize();
+      } else {
+        // Use default settings if none loaded
+        const defaultSettings = {
+          isEnabled: true,
+          minTrackLength: 30,
+          autoScrobble: true,
+          showNotifications: true,
+          scrobbleThreshold: 50,
+          debugMode: false,
+          logLevel: 'info' as const
+        };
+        this.scrobbler = new Scrobbler(this.authManager.getApi(), defaultSettings);
         await this.scrobbler.initialize();
       }
 
@@ -199,7 +251,7 @@ class BackgroundService {
     try {
       this.settings = data.settings;
       
-      if (this.scrobbler) {
+      if (this.scrobbler && this.settings) {
         this.scrobbler.updateSettings(this.settings);
       }
 
@@ -224,7 +276,7 @@ class BackgroundService {
   /**
    * Handle tab updates
    */
-  private handleTabUpdated(tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab): void {
+  private handleTabUpdated(_tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab): void {
     if (changeInfo.status === 'complete' && tab.url?.includes('music.youtube.com')) {
       log('info', 'YouTube Music tab loaded');
     }
@@ -244,7 +296,7 @@ class BackgroundService {
   /**
    * Handle storage changes
    */
-  private handleStorageChanged(changes: { [key: string]: chrome.storage.StorageChange }, areaName: string): void {
+  private handleStorageChanged(_changes: { [key: string]: chrome.storage.StorageChange }, areaName: string): void {
     if (areaName === 'sync') {
       // Settings changed, reload them
       this.initialize();
@@ -296,6 +348,118 @@ class BackgroundService {
       contexts: ['page'],
       documentUrlPatterns: ['https://music.youtube.com/*']
     });
+  }
+
+  /**
+   * Handle start authentication request
+   */
+  private async handleStartAuth(sendResponse: (response?: any) => void): Promise<void> {
+    try {
+      console.log('[Madrak] Background: Starting authentication flow');
+      log('info', 'Starting authentication flow');
+      
+      const authUrl = await this.authManager.startAuth();
+      
+      console.log('[Madrak] Background: Generated auth URL:', authUrl);
+      
+      if (authUrl) {
+        log('info', 'Authentication URL generated:', authUrl);
+        sendResponse({ success: true, authUrl });
+      } else {
+        console.error('[Madrak] Background: Failed to generate authentication URL');
+        log('error', 'Failed to generate authentication URL');
+        sendResponse({ success: false, error: 'Failed to generate authentication URL' });
+      }
+    } catch (error) {
+      console.error('[Madrak] Background: Failed to start authentication:', error);
+      log('error', 'Failed to start authentication:', error);
+      sendResponse({ success: false, error: 'Failed to start authentication' });
+    }
+  }
+
+  /**
+   * Handle logout request
+   */
+  private async handleLogout(): Promise<void> {
+    try {
+      log('info', 'Logging out user');
+      
+      await this.authManager.logout();
+      this.scrobbler = null;
+      
+      log('info', 'User logged out successfully');
+    } catch (error) {
+      log('error', 'Failed to logout:', error);
+    }
+  }
+
+  /**
+   * Handle get queue stats request
+   */
+  private async handleGetQueueStats(sendResponse: (response?: any) => void): Promise<void> {
+    try {
+      if (this.scrobbler) {
+        const stats = await this.scrobbler.getQueueStats();
+        sendResponse({ success: true, stats });
+      } else {
+        sendResponse({ success: true, stats: { total: 0, pending: 0, failed: 0 } });
+      }
+    } catch (error) {
+      log('error', 'Failed to get queue stats:', error);
+      sendResponse({ success: false, error: 'Failed to get queue stats' });
+    }
+  }
+
+  /**
+   * Handle get debug info request
+   */
+  private async handleGetDebugInfo(sendResponse: (response?: any) => void): Promise<void> {
+    try {
+      const { getDebugInfo } = await import('../shared/logger');
+      const debugInfo = getDebugInfo();
+      sendResponse({ success: true, debugInfo });
+    } catch (error) {
+      log('error', 'Failed to get debug info:', error);
+      sendResponse({ success: false, error: 'Failed to get debug info' });
+    }
+  }
+
+  /**
+   * Handle export logs request
+   */
+  private async handleExportLogs(sendResponse: (response?: any) => void): Promise<void> {
+    try {
+      const { exportDebugLogs } = await import('../shared/logger');
+      const logs = exportDebugLogs();
+      sendResponse({ success: true, logs });
+    } catch (error) {
+      log('error', 'Failed to export logs:', error);
+      sendResponse({ success: false, error: 'Failed to export logs' });
+    }
+  }
+
+  /**
+   * Handle clear all data request
+   */
+  private async handleClearAllData(): Promise<void> {
+    try {
+      log('info', 'Clearing all extension data');
+      
+      // Clear storage
+      await chrome.storage.sync.clear();
+      await chrome.storage.local.clear();
+      
+      // Reset state
+      this.scrobbler = null;
+      this.settings = null;
+      
+      // Reinitialize
+      await this.initialize();
+      
+      log('info', 'All data cleared successfully');
+    } catch (error) {
+      log('error', 'Failed to clear all data:', error);
+    }
   }
 
   /**

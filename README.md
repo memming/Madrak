@@ -78,6 +78,15 @@ The extension works automatically with YouTube Music. No additional setup requir
 - Chrome browser
 - Last.fm API credentials
 
+### Build System
+This extension uses **Rollup** instead of Webpack to comply with Chrome Manifest V3's strict Content Security Policy (CSP). Rollup generates clean, eval-free JavaScript bundles that are compatible with Chrome's security requirements.
+
+**Why Rollup?**
+- ✅ **CSP Compliant**: No `eval()` usage, fully compatible with Manifest V3
+- ✅ **Tree Shaking**: Better dead code elimination
+- ✅ **Smaller Bundles**: More efficient output for Chrome extensions
+- ✅ **ES Modules**: Native support for modern JavaScript modules
+
 ### Project Structure
 ```
 src/
@@ -107,13 +116,15 @@ src/
 
 ### Available Scripts
 
-- `npm run dev` - Start development mode with hot reload
-- `npm run build` - Build the extension for production
-- `npm run build:watch` - Build in watch mode
+- `npm run dev` - Start development mode with hot reload (Rollup)
+- `npm run build` - Build the extension for production (Rollup)
+- `npm run build:watch` - Build in watch mode (Rollup)
 - `npm test` - Run test suite
 - `npm run lint` - Run ESLint
 - `npm run type-check` - Run TypeScript type checking
 - `npm run clean` - Clean build artifacts
+
+**Note**: All build commands use Rollup for CSP-compliant output that works with Chrome Manifest V3.
 
 ### Development Workflow
 

@@ -3,7 +3,7 @@
  */
 
 import { ExtensionSettings } from './types';
-import { setLoggerConfig, getLoggerConfig, getStoredLogs, exportLogs, clearStoredLogs } from './utils';
+import { setLoggerConfig, getLoggerConfig, getStoredLogs, clearStoredLogs } from './utils';
 
 /**
  * Initialize logger with settings
@@ -29,7 +29,7 @@ export function getDebugInfo(): any {
     recentErrors: recentLogs,
     timestamp: new Date().toISOString(),
     userAgent: navigator.userAgent,
-    url: window.location.href,
+    url: typeof window !== 'undefined' ? window.location.href : 'service-worker',
   };
 }
 
@@ -64,7 +64,7 @@ export function logSystemInfo(): void {
     language: navigator.language,
     cookieEnabled: navigator.cookieEnabled,
     onLine: navigator.onLine,
-    url: window.location.href,
+    url: typeof window !== 'undefined' ? window.location.href : 'service-worker',
     timestamp: Date.now(),
   };
   

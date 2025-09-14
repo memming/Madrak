@@ -4,13 +4,11 @@
 
 import { YouTubeMusicTrack, Track, Message } from '../shared/types';
 import { YOUTUBE_MUSIC_SELECTORS, MESSAGE_TYPES } from '../shared/constants';
-import { convertYouTubeTrack, isSameTrack, log, debug, info, warn, error, logTrackDetection, debounce } from '../shared/utils';
+import { convertYouTubeTrack, isSameTrack, log, debug, info, debounce } from '../shared/utils';
 
 export class YouTubeMusicDetector {
   private currentTrack: YouTubeMusicTrack | null = null;
   private lastScrobbledTrack: Track | null = null;
-  private isPlaying: boolean = false;
-  private playStartTime: number = 0;
   private observer: MutationObserver | null = null;
   private updateNowPlayingDebounced: (() => void) | null = null;
 
@@ -129,10 +127,10 @@ export class YouTubeMusicDetector {
       }
 
       this.currentTrack = track;
-    } catch (error) {
-      error('Failed to detect current track', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+    } catch (err) {
+      log('error', 'Failed to detect current track', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
         url: window.location.href
       });
     }
@@ -225,7 +223,6 @@ export class YouTubeMusicDetector {
 
     // Update now playing if track is playing
     if (track.isPlaying) {
-      this.playStartTime = Date.now();
       this.updateNowPlayingDebounced?.();
     }
   }
@@ -237,7 +234,6 @@ export class YouTubeMusicDetector {
     log('info', `Play state changed: ${track.isPlaying ? 'playing' : 'paused'}`);
     
     if (track.isPlaying) {
-      this.playStartTime = Date.now();
       this.updateNowPlayingDebounced?.();
     } else {
       // Track was paused, check if we should scrobble
@@ -319,7 +315,8 @@ export class YouTubeMusicDetector {
     }
 
     // Fallback: check if we have track info and assume it's playing
-    const hasTrackInfo = document.querySelector(YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE)?.textContent?.trim();
+    const trackTitle = document.querySelector(YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE);
+    const hasTrackInfo = trackTitle?.textContent?.trim();
     return !!hasTrackInfo;
   }
 
@@ -329,9 +326,9 @@ export class YouTubeMusicDetector {
   private parseDuration(durationStr: string): number {
     const parts = durationStr.split(':').map(Number);
     if (parts.length === 2) {
-      return parts[0] * 60 + parts[1];
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
     } else if (parts.length === 3) {
-      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
     }
     return 0;
   }
@@ -348,7 +345,7 @@ export class YouTubeMusicDetector {
   /**
    * Handle messages from background script
    */
-  private handleMessage(message: Message, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
+  private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
     switch (message.type) {
       case MESSAGE_TYPES.SETTINGS_UPDATE:
         // Settings were updated, we might need to re-evaluate current track

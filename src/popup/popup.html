@@ -4,7 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Last.fm Scrobbler</title>
-    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="./popup.css">
+    <style>
+        /* Fallback styles in case CSS doesn't load */
+        body { 
+            width: 380px !important; 
+            min-height: 500px !important; 
+            background: #fff !important; 
+            font-family: Arial, sans-serif !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .popup-container { 
+            display: block !important; 
+            width: 100% !important; 
+            min-height: 500px !important;
+        }
+        .header { 
+            display: block !important; 
+            padding: 16px !important; 
+            background: #f8f9fa !important;
+            border-bottom: 1px solid #e0e0e0 !important;
+        }
+        .content { 
+            display: block !important; 
+            padding: 20px !important;
+        }
+        .auth-section, .main-section { 
+            display: block !important; 
+        }
+        .hidden { 
+            display: none !important; 
+        }
+    </style>
 </head>
 <body>
     <div class="popup-container">

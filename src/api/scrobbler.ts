@@ -2,20 +2,17 @@
  * Scrobbling functionality
  */
 
-import { Track, ScrobbleData, ScrobbleQueueItem, ExtensionSettings } from '../shared/types';
-import { STORAGE_KEYS, SCROBBLE_STATUS, LASTFM_CONSTANTS } from '../shared/constants';
-import { 
-  isTrackLongEnough, 
-  hasPlayedEnough, 
-  createScrobbleData, 
+import { Track, ScrobbleQueueItem, ExtensionSettings } from '../shared/types';
+import { STORAGE_KEYS, LASTFM_CONSTANTS } from '../shared/constants';
+import {
+  isTrackLongEnough,
+  hasPlayedEnough,
+  createScrobbleData,
   sanitizeTrack,
   log,
   debug,
   info,
-  warn,
-  error,
-  logScrobbleAttempt,
-  sleep 
+  sleep
 } from '../shared/utils';
 import { LastFmApi } from './lastfm-api';
 
@@ -197,7 +194,7 @@ export class Scrobbler {
       // Process the queue
       this.processQueue();
     } catch (err) {
-      error('Failed to queue scrobble', {
+      log('error', 'Failed to queue scrobble', {
         track: {
           artist: track.artist,
           title: track.title,

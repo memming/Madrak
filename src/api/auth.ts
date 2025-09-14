@@ -2,9 +2,9 @@
  * Last.fm authentication handling
  */
 
-import { LastFmSession, LastFmUser, ExtensionSettings } from '../shared/types';
+import { LastFmSession, LastFmUser } from '../shared/types';
 import { STORAGE_KEYS } from '../shared/constants';
-import { getSettings, saveSettings, log } from '../shared/utils';
+import { log } from '../shared/utils';
 import { LastFmApi } from './lastfm-api';
 
 export class AuthManager {

@@ -28,10 +28,10 @@ export function parseDuration(durationStr: string): number {
   const parts = durationStr.split(':').map(Number);
   if (parts.length === 2) {
     // MM:SS format
-    return parts[0] * 60 + parts[1];
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
   } else if (parts.length === 3) {
     // HH:MM:SS format
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
   }
   return 0;
 }
@@ -112,7 +112,7 @@ export function createScrobbleData(track: Track): ScrobbleData {
 export async function getSettings(): Promise<ExtensionSettings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['extension_settings'], (result) => {
-      const settings = result['extension_settings'] || DEFAULT_SETTINGS;
+      const settings = result?.['extension_settings'] || DEFAULT_SETTINGS;
       resolve(settings);
     });
   });
@@ -208,7 +208,7 @@ export function parseQueryString(queryString: string): Record<string, string> {
  * Check if we're on YouTube Music
  */
 export function isYouTubeMusic(): boolean {
-  return window.location.hostname === 'music.youtube.com';
+  return typeof window !== 'undefined' && window.location.hostname === 'music.youtube.com';
 }
 
 /**
