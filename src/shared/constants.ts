@@ -114,3 +114,41 @@ export const SCROBBLE_STATUS = {
   FAILED: 'failed',
   IGNORED: 'ignored',
 } as const;
+
+// Message types for communication between components
+export const MESSAGE_TYPES = {
+  TRACK_DETECTED: 'TRACK_DETECTED',
+  TRACK_ENDED: 'TRACK_ENDED',
+  SCROBBLE_SUCCESS: 'SCROBBLE_SUCCESS',
+  SCROBBLE_ERROR: 'SCROBBLE_ERROR',
+  AUTH_SUCCESS: 'AUTH_SUCCESS',
+  AUTH_ERROR: 'AUTH_ERROR',
+  SETTINGS_UPDATE: 'SETTINGS_UPDATE',
+  GET_QUEUE_STATS: 'GET_QUEUE_STATS',
+  START_AUTH: 'START_AUTH',
+  LOGOUT: 'LOGOUT',
+  CLEAR_ALL_DATA: 'CLEAR_ALL_DATA',
+  GET_DEBUG_INFO: 'GET_DEBUG_INFO',
+  EXPORT_LOGS: 'EXPORT_LOGS',
+} as const;
+
+// Last.fm API endpoints
+export const LASTFM_API_ENDPOINTS = {
+  AUTH: 'https://www.last.fm/api/auth',
+  API: 'https://ws.audioscrobbler.com/2.0/',
+  SESSION: 'https://ws.audioscrobbler.com/2.0/?method=auth.getSession',
+  SCROBBLE: 'https://ws.audioscrobbler.com/2.0/?method=track.scrobble',
+  UPDATE_NOW_PLAYING: 'https://ws.audioscrobbler.com/2.0/?method=track.updateNowPlaying',
+  USER_INFO: 'https://ws.audioscrobbler.com/2.0/?method=user.getInfo',
+} as const;
+
+// Default extension settings
+export const DEFAULT_SETTINGS = {
+  isEnabled: true,
+  minTrackLength: 30, // 30 seconds
+  autoScrobble: true,
+  showNotifications: true,
+  scrobbleThreshold: 50, // 50% of track
+  debugMode: false, // disabled by default
+  logLevel: 'info', // info level by default
+} as const;

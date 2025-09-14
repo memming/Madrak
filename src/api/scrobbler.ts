@@ -153,8 +153,11 @@ export class Scrobbler {
       });
 
       const queueItem: ScrobbleQueueItem = {
-        track: scrobbleData,
-        timestamp: scrobbleData.timestamp,
+        track: {
+          ...scrobbleData,
+          timestamp: scrobbleData.timestamp || Math.floor(Date.now() / 1000)
+        },
+        timestamp: scrobbleData.timestamp || Math.floor(Date.now() / 1000),
         retryCount: 0,
         id: Math.random().toString(36).substr(2, 9),
       };
@@ -193,15 +196,15 @@ export class Scrobbler {
       
       // Process the queue
       this.processQueue();
-    } catch (error) {
+    } catch (err) {
       error('Failed to queue scrobble', {
         track: {
           artist: track.artist,
           title: track.title,
           album: track.album
         },
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined
       });
     }
   }

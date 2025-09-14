@@ -3,7 +3,7 @@
  */
 
 import { Track, ScrobbleData, YouTubeMusicTrack, ExtensionSettings } from './types';
-import { DEFAULT_SETTINGS } from './types';
+import { DEFAULT_SETTINGS } from './constants';
 
 /**
  * Generate a unique ID for tracking purposes
@@ -79,7 +79,7 @@ export function convertYouTubeTrack(ytTrack: YouTubeMusicTrack): Track {
   return {
     artist: ytTrack.artist,
     title: ytTrack.title,
-    album: ytTrack.album,
+    album: ytTrack.album || undefined,
     duration: ytTrack.duration,
     timestamp: Math.floor(Date.now() / 1000),
   };
@@ -112,7 +112,7 @@ export function createScrobbleData(track: Track): ScrobbleData {
 export async function getSettings(): Promise<ExtensionSettings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['extension_settings'], (result) => {
-      const settings = result.extension_settings || DEFAULT_SETTINGS;
+      const settings = result['extension_settings'] || DEFAULT_SETTINGS;
       resolve(settings);
     });
   });
@@ -123,7 +123,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
  */
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {
   return new Promise((resolve) => {
-    chrome.storage.sync.set({ extension_settings: settings }, () => {
+    chrome.storage.sync.set({ 'extension_settings': settings }, () => {
       resolve();
     });
   });

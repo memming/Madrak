@@ -5,12 +5,12 @@
 export interface Track {
   artist: string;
   title: string;
-  album?: string;
-  duration?: number;
-  timestamp?: number;
-  albumArtist?: string;
-  trackNumber?: number;
-  mbid?: string;
+  album?: string | undefined;
+  duration?: number | undefined;
+  timestamp?: number | undefined;
+  albumArtist?: string | undefined;
+  trackNumber?: number | undefined;
+  mbid?: string | undefined;
 }
 
 export interface ScrobbleData extends Track {
@@ -108,22 +108,22 @@ export interface ExtensionSettings {
 export interface YouTubeMusicTrack {
   title: string;
   artist: string;
-  album?: string;
+  album?: string | undefined;
   duration: number;
   currentTime: number;
   isPlaying: boolean;
-  url?: string;
-  thumbnail?: string;
+  url?: string | undefined;
+  thumbnail?: string | undefined;
 }
 
 export interface Message {
-  type: 'TRACK_DETECTED' | 'TRACK_ENDED' | 'SCROBBLE_SUCCESS' | 'SCROBBLE_ERROR' | 'AUTH_SUCCESS' | 'AUTH_ERROR' | 'SETTINGS_UPDATE';
+  type: 'TRACK_DETECTED' | 'TRACK_ENDED' | 'SCROBBLE_SUCCESS' | 'SCROBBLE_ERROR' | 'AUTH_SUCCESS' | 'AUTH_ERROR' | 'SETTINGS_UPDATE' | 'GET_QUEUE_STATS' | 'START_AUTH' | 'LOGOUT' | 'CLEAR_ALL_DATA' | 'GET_DEBUG_INFO' | 'EXPORT_LOGS';
   data?: any;
   error?: string;
 }
 
 export interface ScrobbleQueueItem {
-  track: Track;
+  track: ScrobbleData;
   timestamp: number;
   retryCount: number;
   id: string;
@@ -135,31 +135,3 @@ export interface ApiError {
   details?: any;
 }
 
-export const DEFAULT_SETTINGS: ExtensionSettings = {
-  isEnabled: true,
-  minTrackLength: 30, // 30 seconds
-  autoScrobble: true,
-  showNotifications: true,
-  scrobbleThreshold: 50, // 50% of track
-  debugMode: false, // disabled by default
-  logLevel: 'info', // info level by default
-};
-
-export const LASTFM_API_ENDPOINTS = {
-  AUTH: 'https://www.last.fm/api/auth',
-  API: 'https://ws.audioscrobbler.com/2.0/',
-  SESSION: 'https://ws.audioscrobbler.com/2.0/?method=auth.getSession',
-  SCROBBLE: 'https://ws.audioscrobbler.com/2.0/?method=track.scrobble',
-  UPDATE_NOW_PLAYING: 'https://ws.audioscrobbler.com/2.0/?method=track.updateNowPlaying',
-  USER_INFO: 'https://ws.audioscrobbler.com/2.0/?method=user.getInfo',
-} as const;
-
-export const MESSAGE_TYPES = {
-  TRACK_DETECTED: 'TRACK_DETECTED',
-  TRACK_ENDED: 'TRACK_ENDED',
-  SCROBBLE_SUCCESS: 'SCROBBLE_SUCCESS',
-  SCROBBLE_ERROR: 'SCROBBLE_ERROR',
-  AUTH_SUCCESS: 'AUTH_SUCCESS',
-  AUTH_ERROR: 'AUTH_ERROR',
-  SETTINGS_UPDATE: 'SETTINGS_UPDATE',
-} as const;

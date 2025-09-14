@@ -67,9 +67,9 @@ export class LastFmApi {
     };
 
     if (authenticated && this.session) {
-      requestParams.sk = this.session.key;
+      (requestParams as any).sk = this.session.key;
       const signature = await this.generateSignature(requestParams);
-      requestParams.api_sig = signature;
+      (requestParams as any).api_sig = signature;
       debug('Generated API signature for authenticated request', { 
         method, 
         hasSession: !!this.session,
@@ -140,14 +140,14 @@ export class LastFmApi {
       });
 
       return data;
-    } catch (error) {
+    } catch (err) {
       error(`API request failed for ${method}`, {
         method,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
         url: url.replace(this.apiKey, '[API_KEY]')
       });
-      throw error;
+      throw err;
     }
   }
 
@@ -216,14 +216,14 @@ export class LastFmApi {
     });
 
     try {
-      const response = await this.makeRequest<ScrobbleResponse>('track.scrobble', params, true);
+      const response = await this.makeRequest<any>('track.scrobble', params, true);
       
       if (!response.scrobbles) {
         throw new Error('Invalid scrobble response');
       }
 
       log('info', `Scrobbled ${response.scrobbles['@attr'].accepted} tracks successfully`);
-      return response;
+      return response as ScrobbleResponse;
     } catch (error) {
       log('error', 'Failed to scrobble tracks:', error);
       throw error;
@@ -251,16 +251,16 @@ export class LastFmApi {
     };
 
     try {
-      const response = await this.makeRequest<{ session: LastFmSession }>('auth.getSession', params);
+      const response = await this.makeRequest<any>('auth.getSession', params);
       
       if (!response.session) {
         throw new Error('Authentication failed');
       }
 
-      this.session = response.session;
+      this.session = response.session as LastFmSession;
       log('info', `Authentication successful for user: ${response.session.name}`);
       
-      return response.session;
+      return response.session as LastFmSession;
     } catch (error) {
       log('error', 'Authentication failed:', error);
       throw error;

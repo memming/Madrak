@@ -32,7 +32,9 @@ class BackgroundService {
       this.settings = await getSettings();
       
       // Initialize logger with settings
-      initializeLogger(this.settings);
+      if (this.settings) {
+        initializeLogger(this.settings);
+      }
       
       // Log system info for debugging
       logSystemInfo();

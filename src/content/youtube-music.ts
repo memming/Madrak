@@ -309,12 +309,12 @@ export class YouTubeMusicDetector {
     const pauseButton = document.querySelector(YOUTUBE_MUSIC_SELECTORS.PAUSE_BUTTON);
     
     // If pause button is visible, it's playing
-    if (pauseButton && pauseButton.offsetParent !== null) {
+    if (pauseButton && (pauseButton as HTMLElement).offsetParent !== null) {
       return true;
     }
     
     // If play button is visible, it's paused
-    if (playButton && playButton.offsetParent !== null) {
+    if (playButton && (playButton as HTMLElement).offsetParent !== null) {
       return false;
     }
 

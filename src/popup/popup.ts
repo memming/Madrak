@@ -269,14 +269,16 @@ class PopupController {
       }
 
       // Send message to content script to get current track
-      const response = await chrome.tabs.sendMessage(tab.id!, {
-        type: 'GET_CURRENT_TRACK'
-      });
+      if (tab.id) {
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: 'GET_CURRENT_TRACK'
+        });
 
-      if (response?.track) {
-        this.showCurrentTrack(response.track);
-      } else {
-        this.hideCurrentTrack();
+        if (response?.track) {
+          this.showCurrentTrack(response.track);
+        } else {
+          this.hideCurrentTrack();
+        }
       }
     } catch (error) {
       log('error', 'Failed to update current track:', error);
@@ -529,10 +531,10 @@ class PopupController {
 
     // Update tab content
     const contents = document.querySelectorAll('.debug-tab-content');
-    contents.forEach(content => content.style.display = 'none');
+    contents.forEach(content => (content as HTMLElement).style.display = 'none');
     const activeContent = document.getElementById(`${tabName}Tab`);
     if (activeContent) {
-      activeContent.style.display = 'block';
+      (activeContent as HTMLElement).style.display = 'block';
     }
 
     // Load content for the active tab
