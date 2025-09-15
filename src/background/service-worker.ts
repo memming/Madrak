@@ -352,52 +352,6 @@ class BackgroundService {
     }
   }
 
-  /**
-   * Handle context menu clicks
-   */
-  private handleContextMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): void {
-    if (info.menuItemId === 'scrobble-now') {
-      // Handle manual scrobble request
-      this.handleManualScrobble(tab);
-    }
-  }
-
-  /**
-   * Handle manual scrobble request
-   */
-  private async handleManualScrobble(tab?: chrome.tabs.Tab): Promise<void> {
-    try {
-      if (!tab?.id) return;
-
-      // Send message to content script to get current track
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        type: 'GET_CURRENT_TRACK'
-      });
-
-      if (response?.track && this.scrobbler) {
-        await this.scrobbler.queueScrobble(response.track);
-        showNotification(
-          'Manual Scrobble',
-          'Track added to scrobble queue',
-          'basic'
-        );
-      }
-    } catch (error) {
-      log('error', 'Failed to handle manual scrobble:', error);
-    }
-  }
-
-  /**
-   * Create context menu
-   */
-  private createContextMenu(): void {
-    chrome.contextMenus.create({
-      id: 'scrobble-now',
-      title: 'Scrobble this track',
-      contexts: ['page'],
-      documentUrlPatterns: ['https://music.youtube.com/*']
-    });
-  }
 
   /**
    * Handle start authentication request - get token and open Last.fm auth page
@@ -721,7 +675,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener((details) => {
   backgroundService['handleInstalled'](details);
-  backgroundService['createContextMenu']();
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -755,9 +708,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   backgroundService['handleStorageChanged'](changes, areaName);
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  backgroundService['handleContextMenuClick'](info, tab);
-});
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   backgroundService['handleTabRemoved'](tabId);
