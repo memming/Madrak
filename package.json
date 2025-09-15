@@ -1,6 +1,6 @@
 {
   "name": "madrak",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Madrak - A Chrome extension that automatically scrobbles music from YouTube Music to Last.fm",
   "main": "dist/background/service-worker.js",
