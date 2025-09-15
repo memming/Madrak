@@ -40,14 +40,14 @@ export class LastFmApi {
   /**
    * Generate API signature for authenticated requests
    */
-  private async generateSignature(params: Record<string, string>): Promise<string> {
+  private generateSignature(params: Record<string, string>): string {
     const sortedParams = Object.keys(params)
       .sort()
       .map(key => `${key}${params[key]}`)
       .join('');
     
     const signatureString = sortedParams + this.sharedSecret;
-    return await generateMD5(signatureString);
+    return generateMD5(signatureString);
   }
 
   /**
@@ -71,7 +71,7 @@ export class LastFmApi {
         (requestParams as any).sk = this.session.key;
       }
       
-      const signature = await this.generateSignature(requestParams);
+      const signature = this.generateSignature(requestParams);
       (requestParams as any).api_sig = signature;
       debug('Generated API signature for authenticated request', { 
         method, 

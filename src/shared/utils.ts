@@ -170,12 +170,10 @@ export function sleep(ms: number): Promise<void> {
 /**
  * Generate MD5 hash for Last.fm API authentication
  */
-export async function generateMD5(text: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await crypto.subtle.digest('MD5', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+export function generateMD5(text: string): string {
+  // Use blueimp-md5 library since Web Crypto API doesn't support MD5
+  const MD5 = require('blueimp-md5');
+  return MD5(text);
 }
 
 /**
