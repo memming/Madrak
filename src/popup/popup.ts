@@ -354,18 +354,27 @@ class PopupController {
    */
   private async updateCurrentTrack(): Promise<void> {
     try {
-      // Get current track from active tab
+      // Get current tab from active tab
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs.length === 0) return;
-
-      const tab = tabs[0];
-      if (!tab?.url?.includes('music.youtube.com')) {
+      if (tabs.length === 0) {
         this.hideCurrentTrack();
         return;
       }
 
-      // Send message to content script to get current track
-      if (tab?.id) {
+      const tab = tabs[0];
+      if (!tab?.url?.includes('music.youtube.com')) {
+        this.showNotOnYouTubeMusic();
+        return;
+      }
+
+      // Check if content script is available
+      if (!tab?.id) {
+        this.hideCurrentTrack();
+        return;
+      }
+
+      try {
+        // Send message to content script to get current track
         const response = await chrome.tabs.sendMessage(tab.id, {
           type: MESSAGE_TYPES.GET_CURRENT_TRACK
         });
@@ -377,6 +386,25 @@ class PopupController {
             thumbnail: response.thumbnail
           });
         } else {
+          this.hideCurrentTrack();
+        }
+      } catch (messageError) {
+        // Handle specific message errors
+        if (messageError instanceof Error) {
+          if (messageError.message.includes('Could not establish connection') || 
+              messageError.message.includes('Receiving end does not exist')) {
+            log('warn', 'Content script not available on this tab', {
+              tabId: tab.id,
+              url: tab.url,
+              error: messageError.message
+            });
+            this.showContentScriptNotAvailable();
+          } else {
+            log('error', 'Failed to communicate with content script:', messageError);
+            this.hideCurrentTrack();
+          }
+        } else {
+          log('error', 'Unknown error communicating with content script:', messageError);
           this.hideCurrentTrack();
         }
       }
@@ -430,6 +458,92 @@ class PopupController {
     const section = document.getElementById('currentTrackSection');
     if (section) {
       section.style.display = 'none';
+    }
+  }
+
+  /**
+   * Show not on YouTube Music message
+   */
+  private showNotOnYouTubeMusic(): void {
+    const section = document.getElementById('currentTrackSection');
+    if (section) {
+      section.style.display = 'block';
+    }
+
+    const trackTitle = document.getElementById('trackTitle');
+    if (trackTitle) {
+      trackTitle.textContent = 'Not on YouTube Music';
+    }
+
+    const trackArtist = document.getElementById('trackArtist');
+    if (trackArtist) {
+      trackArtist.textContent = 'Open YouTube Music to start scrobbling';
+    }
+
+    const trackAlbum = document.getElementById('trackAlbum');
+    if (trackAlbum) {
+      trackAlbum.textContent = '';
+    }
+
+    const trackArtwork = document.getElementById('trackArtwork') as HTMLImageElement;
+    if (trackArtwork) {
+      trackArtwork.src = '';
+      trackArtwork.alt = '';
+    }
+
+    // Update scrobble status to show info
+    const statusElement = document.getElementById('scrobbleStatus');
+    if (statusElement) {
+      const statusIcon = statusElement.querySelector('.status-icon');
+      const statusText = statusElement.querySelector('.status-text');
+      
+      if (statusIcon && statusText) {
+        statusIcon.textContent = '🎵';
+        statusText.textContent = 'Go to music.youtube.com';
+      }
+    }
+  }
+
+  /**
+   * Show content script not available message
+   */
+  private showContentScriptNotAvailable(): void {
+    const section = document.getElementById('currentTrackSection');
+    if (section) {
+      section.style.display = 'block';
+    }
+
+    const trackTitle = document.getElementById('trackTitle');
+    if (trackTitle) {
+      trackTitle.textContent = 'Content script not loaded';
+    }
+
+    const trackArtist = document.getElementById('trackArtist');
+    if (trackArtist) {
+      trackArtist.textContent = 'Please refresh the YouTube Music page';
+    }
+
+    const trackAlbum = document.getElementById('trackAlbum');
+    if (trackAlbum) {
+      trackAlbum.textContent = '';
+    }
+
+    const trackArtwork = document.getElementById('trackArtwork') as HTMLImageElement;
+    if (trackArtwork) {
+      trackArtwork.src = '';
+      trackArtwork.alt = '';
+    }
+
+    // Update scrobble status to show error
+    const statusElement = document.getElementById('scrobbleStatus');
+    if (statusElement) {
+      const statusIcon = statusElement.querySelector('.status-icon');
+      const statusText = statusElement.querySelector('.status-text');
+      
+      if (statusIcon && statusText) {
+        statusIcon.textContent = '⚠️';
+        statusText.textContent = 'Refresh page to enable tracking';
+      }
     }
   }
 
