@@ -131,11 +131,13 @@ export class YouTubeMusicDetector {
         debug('Track changed detected', {
           previousTrack: this.currentTrack ? {
             artist: this.currentTrack.artist,
-            title: this.currentTrack.title
+            title: this.currentTrack.title,
+            isPlaying: this.currentTrack.isPlaying
           } : null,
           newTrack: {
             artist: track.artist,
-            title: track.title
+            title: track.title,
+            isPlaying: track.isPlaying
           }
         });
         this.handleTrackChanged(track);
@@ -143,13 +145,17 @@ export class YouTubeMusicDetector {
         debug('Play state changed', {
           track: `${track.artist} - ${track.title}`,
           wasPlaying: this.currentTrack.isPlaying,
-          nowPlaying: track.isPlaying
+          nowPlaying: track.isPlaying,
+          previousTrack: this.currentTrack,
+          newTrack: track
         });
         this.handlePlayStateChanged(track);
       } else {
         debug('No significant changes detected', {
           track: `${track.artist} - ${track.title}`,
-          isPlaying: track.isPlaying
+          isPlaying: track.isPlaying,
+          currentTrack: this.currentTrack,
+          newTrack: track
         });
       }
 
@@ -430,9 +436,31 @@ export class YouTubeMusicDetector {
    * Update now playing status
    */
   private updateNowPlaying(): void {
-    if (!this.currentTrack || !this.currentTrack.isPlaying) return;
+    debug('updateNowPlaying called', {
+      hasCurrentTrack: !!this.currentTrack,
+      isPlaying: this.currentTrack?.isPlaying,
+      track: this.currentTrack ? {
+        artist: this.currentTrack.artist,
+        title: this.currentTrack.title,
+        isPlaying: this.currentTrack.isPlaying
+      } : null
+    });
+
+    if (!this.currentTrack || !this.currentTrack.isPlaying) {
+      debug('updateNowPlaying: Skipping - no track or not playing');
+      return;
+    }
 
     const convertedTrack = convertYouTubeTrack(this.currentTrack);
+    
+    debug('Sending now playing update to background', {
+      track: {
+        artist: convertedTrack.artist,
+        title: convertedTrack.title,
+        album: convertedTrack.album,
+        duration: convertedTrack.duration
+      }
+    });
     
     this.sendMessage({
       type: MESSAGE_TYPES.TRACK_DETECTED,
@@ -452,20 +480,68 @@ export class YouTubeMusicDetector {
     const playButton = document.querySelector(YOUTUBE_MUSIC_SELECTORS.PLAY_BUTTON);
     const pauseButton = document.querySelector(YOUTUBE_MUSIC_SELECTORS.PAUSE_BUTTON);
     
+    // Debug play state detection
+    debug('Play state detection', {
+      playButton: !!playButton,
+      pauseButton: !!pauseButton,
+      playButtonVisible: playButton ? (playButton as HTMLElement).offsetParent !== null : false,
+      pauseButtonVisible: pauseButton ? (pauseButton as HTMLElement).offsetParent !== null : false,
+      playButtonState: playButton?.getAttribute('state') || 'none',
+      pauseButtonState: pauseButton?.getAttribute('state') || 'none',
+      selectors: {
+        playButtonSelector: YOUTUBE_MUSIC_SELECTORS.PLAY_BUTTON,
+        pauseButtonSelector: YOUTUBE_MUSIC_SELECTORS.PAUSE_BUTTON
+      }
+    });
+    
     // If pause button is visible, it's playing
     if (pauseButton && (pauseButton as HTMLElement).offsetParent !== null) {
+      debug('Detected playing state via pause button');
       return true;
     }
     
     // If play button is visible, it's paused
     if (playButton && (playButton as HTMLElement).offsetParent !== null) {
+      debug('Detected paused state via play button');
       return false;
+    }
+
+    // Try alternative detection methods
+    const allPlayButtons = document.querySelectorAll('ytmusic-play-button-renderer');
+    debug('Alternative play state detection', {
+      allPlayButtonsCount: allPlayButtons.length,
+      allPlayButtonStates: Array.from(allPlayButtons).map(btn => ({
+        state: btn.getAttribute('state'),
+        visible: (btn as HTMLElement).offsetParent !== null,
+        className: btn.className
+      }))
+    });
+
+    // Check for any play button with state="playing" that's visible
+    for (const button of allPlayButtons) {
+      const state = button.getAttribute('state');
+      const isVisible = (button as HTMLElement).offsetParent !== null;
+      if (state === 'playing' && isVisible) {
+        debug('Detected playing state via alternative method');
+        return true;
+      }
+      if (state === 'paused' && isVisible) {
+        debug('Detected paused state via alternative method');
+        return false;
+      }
     }
 
     // Fallback: check if we have track info and assume it's playing
     const trackTitle = document.querySelector(YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE);
     const hasTrackInfo = trackTitle?.textContent?.trim();
-    return !!hasTrackInfo;
+    const fallbackResult = !!hasTrackInfo;
+    
+    debug('Using fallback play state detection', {
+      hasTrackInfo: !!hasTrackInfo,
+      fallbackResult: fallbackResult
+    });
+    
+    return fallbackResult;
   }
 
   /**
