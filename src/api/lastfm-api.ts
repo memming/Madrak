@@ -41,12 +41,19 @@ export class LastFmApi {
    * Generate API signature for authenticated requests
    */
   private generateSignature(params: Record<string, string>): string {
-    const sortedParams = Object.keys(params)
-      .sort()
-      .map(key => `${key}${params[key]}`)
-      .join('');
-    
-    const signatureString = sortedParams + this.sharedSecret;
+    const keys = Object.keys(params).sort();
+    let signatureString = '';
+
+    for (const key of keys) {
+      // Exclude format and callback parameters from signature (like Web Scrobbler)
+      if (['format', 'callback'].includes(key)) {
+        continue;
+      }
+
+      signatureString += `${key}${params[key] || ''}`;
+    }
+
+    signatureString += this.sharedSecret;
     return generateMD5(signatureString);
   }
 
