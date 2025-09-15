@@ -72,7 +72,6 @@ export const ERROR_CODES = {
 export const EVENTS = {
   TRACK_CHANGED: 'track_changed',
   TRACK_PLAYING: 'track_playing',
-  TRACK_PAUSED: 'track_paused',
   TRACK_ENDED: 'track_ended',
   SCROBBLE_QUEUED: 'scrobble_queued',
   SCROBBLE_SENT: 'scrobble_sent',
@@ -132,6 +131,7 @@ export const MESSAGE_TYPES = {
   GET_DEBUG_INFO: 'GET_DEBUG_INFO',
   EXPORT_LOGS: 'EXPORT_LOGS',
   GET_CURRENT_TRACK: 'GET_CURRENT_TRACK',
+  REFRESH_USER_DATA: 'REFRESH_USER_DATA',
   PING: 'PING',
 } as const;
 

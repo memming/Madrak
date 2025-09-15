@@ -561,10 +561,8 @@ export class YouTubeMusicDetector {
     
     if (track.isPlaying) {
       this.updateNowPlayingDebounced?.();
-    } else {
-      // Track was paused, check if we should scrobble
-      this.checkForScrobble();
     }
+    // Note: We don't scrobble when paused - only when track changes or ends
   }
 
   /**

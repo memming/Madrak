@@ -125,7 +125,6 @@ class OptionsController {
    */
   private populateForm(): void {
     // General settings
-    this.setCheckboxValue('enableScrobbling', this.settings.isEnabled);
     this.setCheckboxValue('autoScrobble', this.settings.autoScrobble);
     this.setCheckboxValue('showNotifications', this.settings.showNotifications);
 
@@ -344,7 +343,8 @@ class OptionsController {
    * Collect form data into settings object
    */
   private collectFormData(): void {
-    this.settings.isEnabled = this.getCheckboxValue('enableScrobbling');
+    // isEnabled is always true - no UI control needed
+    this.settings.isEnabled = true;
     this.settings.autoScrobble = this.getCheckboxValue('autoScrobble');
     this.settings.showNotifications = this.getCheckboxValue('showNotifications');
     this.settings.minTrackLength = parseInt(this.getInputValue('minTrackLength')) || 30;

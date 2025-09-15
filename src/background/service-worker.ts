@@ -3,7 +3,7 @@
  */
 
 import { Message, Track, ExtensionSettings, YouTubeMusicTrack } from '../shared/types';
-import { MESSAGE_TYPES } from '../shared/constants';
+import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
 import { getSettings, log, debug, info, showNotification } from '../shared/utils';
 import { initializeLogger, logSystemInfo } from '../shared/logger';
 import { AuthManager } from '../api/auth';
@@ -63,7 +63,6 @@ class BackgroundService {
       
       debug('Background service initialization started', {
         settings: {
-          isEnabled: this.settings.isEnabled,
           debugMode: this.settings.debugMode,
           logLevel: this.settings.logLevel,
           minTrackLength: this.settings.minTrackLength,
@@ -142,6 +141,9 @@ class BackgroundService {
       case MESSAGE_TYPES.CLEAR_ALL_DATA:
         this.handleClearAllData();
         break;
+      case MESSAGE_TYPES.REFRESH_USER_DATA:
+        this.handleRefreshUserData(sendResponse);
+        return true; // Response will be sent asynchronously
       default:
         log('warn', 'Unknown message type:', message.type);
     }
@@ -160,7 +162,7 @@ class BackgroundService {
       this.youtubeTrack = data.youtubeTrack;
       this.activeTabId = sender.tab?.id ?? null;
 
-      if (!this.scrobbler || !this.settings?.isEnabled) {
+      if (!this.scrobbler) {
         return;
       }
 
@@ -187,7 +189,7 @@ class BackgroundService {
       this.youtubeTrack = null;
       this.activeTabId = null;
 
-      if (!this.scrobbler || !this.settings?.isEnabled) {
+      if (!this.scrobbler) {
         return;
       }
 
@@ -630,6 +632,53 @@ class BackgroundService {
     } catch (error) {
       log('error', 'Failed to export logs:', error);
       sendResponse({ success: false, error: 'Failed to export logs' });
+    }
+  }
+
+  /**
+   * Handle refresh user data request
+   */
+  private async handleRefreshUserData(sendResponse: (response?: any) => void): Promise<void> {
+    try {
+      if (!this.authManager.isAuthenticated()) {
+        sendResponse({ success: false, error: 'Not authenticated' });
+        return;
+      }
+
+      log('info', 'Refreshing user data from Last.fm');
+      
+      // Get the current session to get the username
+      const session = this.authManager.getSession();
+      if (!session) {
+        sendResponse({ success: false, error: 'No session found' });
+        return;
+      }
+      
+      // Get fresh user data from Last.fm API using the username
+      const userData = await this.authManager.getApi().getUserInfo(session.name);
+      
+      // Update stored user data
+      await chrome.storage.sync.set({
+        [STORAGE_KEYS.LASTFM_USER]: userData
+      });
+      
+      // Update settings with new user data
+      if (this.settings) {
+        this.settings.lastFmUser = userData;
+      }
+      
+      log('info', 'User data refreshed successfully', {
+        username: userData.name,
+        playcount: userData.playcount
+      });
+      
+      sendResponse({ success: true, userData });
+    } catch (error) {
+      log('error', 'Failed to refresh user data:', error);
+      sendResponse({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to refresh user data' 
+      });
     }
   }
 

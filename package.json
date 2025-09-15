@@ -1,6 +1,6 @@
 {
   "name": "madrak",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "description": "Madrak - A Chrome extension that automatically scrobbles music from YouTube Music to Last.fm",
   "main": "dist/background/service-worker.js",
@@ -13,7 +13,8 @@
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "package": "npm run build && web-ext build --source-dir dist"
+    "package": "npm run build && web-ext build --source-dir dist",
+    "release": "npm run build && web-ext build --source-dir dist --overwrite-dest"
   },
   "keywords": [
     "chrome-extension",

@@ -75,7 +75,10 @@
                     </div>
                     <div class="user-details">
                         <h3 id="userName">Loading...</h3>
-                        <p id="userPlaycount">0 plays</p>
+                        <div class="playcount-container">
+                            <p id="userPlaycount">0 plays</p>
+                            <button id="refreshButton" class="btn-refresh" title="Refresh play count">↻</button>
+                        </div>
                     </div>
                     <button id="disconnectButton" class="btn btn-secondary btn-small">Disconnect</button>
                 </div>
@@ -104,9 +107,6 @@
 
                 <!-- Controls -->
                 <div class="controls">
-                    <button id="pauseButton" class="btn btn-secondary">
-                        <span class="btn-text">Pause Scrobbling</span>
-                    </button>
                     <button id="settingsButton" class="btn btn-outline">
                         <span class="btn-text">Settings</span>
                     </button>

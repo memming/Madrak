@@ -2,18 +2,18 @@
 
 A modern Chrome browser extension that automatically scrobbles music from YouTube Music to your Last.fm account. Named after the mystical character from Roger Zelazny's novel.
 
-**Version**: 0.3.1
+**Version**: 0.3.2
 
 ## Features
 
 - 🎵 **Automatic Scrobbling**: Automatically detects and scrobbles music playing on YouTube Music
 - 🔐 **Secure Authentication**: Complete OAuth-based authentication with Last.fm
 - ⚡ **Real-time Detection**: Monitors YouTube Music for track changes in real-time
-- 🎛️ **User Controls**: Pause/resume scrobbling, manual track correction
-- 📊 **Live Statistics**: Real-time scrobble count and queue status updates
+- 📊 **Live Statistics**: Real-time scrobble count and queue status updates with automatic refresh
 - 🔧 **Customizable Settings**: Configure scrobbling preferences and thresholds
-- 🐛 **Debug Mode**: Comprehensive logging and debugging tools
-- 🚀 **Modern UI**: Clean, responsive interface built with modern web technologies
+- 🐛 **Debug Mode**: Comprehensive logging and debugging tools with detailed track parsing
+- 🚀 **Modern UI**: Clean, responsive interface with direct links to YouTube Music and Last.fm profiles
+- 🔄 **Smart Refresh**: Automatically updates your Last.fm play count every time you open the popup
 
 ## Installation
 
@@ -32,9 +32,9 @@ A modern Chrome browser extension that automatically scrobbles music from YouTub
    npm install
    ```
 
-3. Build the extension:
+3. Build and package the extension:
    ```bash
-   npm run build
+   npm run release
    ```
 
 4. Load the extension in Chrome:
@@ -61,11 +61,12 @@ The extension works automatically with YouTube Music. No additional setup requir
    - Play music on YouTube Music
    - The extension will automatically detect and scrobble tracks
    - View scrobbling status in the extension popup
+   - Your Last.fm play count refreshes automatically
 
-3. **Manual Controls**:
-   - Pause/resume scrobbling
-   - Correct track information if needed
-   - View scrobble history
+3. **Quick Access**:
+   - Click your username to visit your Last.fm profile
+   - When not playing music, click the YouTube Music link to start listening
+   - Use the refresh button (↻) to manually update your play count
 
 ## Development
 
@@ -113,15 +114,15 @@ src/
 
 ### Available Scripts
 
-- `npm run dev` - Start development mode with hot reload (Rollup)
-- `npm run build` - Build the extension for production (Rollup)
-- `npm run build:watch` - Build in watch mode (Rollup)
+- `npm run dev` - Start development mode with hot reload
+- `npm run build` - Build the extension for production
+- `npm run build:watch` - Build in watch mode
+- `npm run package` - Build and package (creates new ZIP)
+- `npm run release` - Build and package (overwrites existing ZIP)
 - `npm test` - Run test suite
 - `npm run lint` - Run ESLint
 - `npm run type-check` - Run TypeScript type checking
 - `npm run clean` - Clean build artifacts
-
-**Note**: All build commands use Rollup for CSP-compliant output that works with Chrome Manifest V3.
 
 ### Development Workflow
 
@@ -148,10 +149,10 @@ src/
 ### Building for Production
 
 ```bash
-npm run build
+npm run release
 ```
 
-The built extension will be in the `dist` folder, ready for packaging or Chrome Web Store submission.
+The built extension will be packaged as `madrak-0.3.2.zip` in the `web-ext-artifacts` folder, ready for Chrome Web Store submission.
 
 ## API Reference
 
@@ -160,27 +161,26 @@ The built extension will be in the `dist` folder, ready for packaging or Chrome 
 The extension integrates with Last.fm's API for:
 - User authentication (OAuth)
 - Track scrobbling
-- User information retrieval
-- Scrobble history
+- User information retrieval with automatic refresh
+- Real-time play count updates
 
 ### YouTube Music Integration
 
 The extension monitors YouTube Music's DOM for:
-- Currently playing track information
+- Currently playing track information with improved parsing
 - Play/pause state changes
 - Track duration and progress
-- Artist and album information
+- Artist, album, and year information with smart extraction
 
 ## Configuration
 
 ### Extension Settings
 Users can configure:
 - **Debug Mode**: Enable detailed logging for troubleshooting
-- **Log Level**: Choose between INFO, DEBUG, WARN, ERROR levels
-- **Scrobbling Thresholds**: Minimum track length for scrobbling
-- **Auto-scrobbling**: Enable/disable automatic scrobbling
+- **Auto-scrobbling**: Automatic scrobbling (always enabled)
+- **Scrobbling Threshold**: Minimum percentage of track to scrobble (default: 50%)
+- **Minimum Track Length**: Shortest track length to scrobble (default: 30 seconds)
 - **Notifications**: Show/hide scrobbling notifications
-- **Track Correction**: Manual track information editing
 
 ## Troubleshooting
 
@@ -201,12 +201,27 @@ Users can configure:
    - Check Last.fm API credentials
    - Verify OAuth redirect URLs
 
+4. **Popup disappearing or showing errors**:
+   - The extension now handles errors gracefully
+   - Auto-refresh runs silently in the background
+   - Manual refresh also runs without showing error popups
+
 ### Debug Mode
 
-Enable debug mode in the extension options to see detailed logging information. Debug logs will appear in:
+Enable debug mode in the extension options to see detailed logging information with the format `[ARTIST][TITLE][ALBUM][YEAR]`. Debug logs will appear in:
 - **YouTube Music Console**: Right-click → Inspect → Console
 - **Extension Console**: Go to `chrome://extensions/` → Click "Inspect views: service worker"
 - **Popup Debug Panel**: Open the extension popup and click "Debug" to view system information
+
+## Permissions
+
+The extension requires these permissions:
+- **storage**: Store settings and authentication data locally
+- **activeTab**: Access the current YouTube Music tab
+- **identity**: Handle Last.fm OAuth authentication
+- **notifications**: Show scrobbling status notifications
+- **tabs**: Manage YouTube Music tabs for scrobbling
+- **host_permissions**: Access YouTube Music and Last.fm domains
 
 ## Contributing
 
@@ -228,8 +243,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 This extension:
 - Only accesses YouTube Music pages when you're actively using them
 - Stores your Last.fm authentication data locally in your browser
-- Does not collect or transmit personal data
+- Does not collect or transmit personal data beyond what's needed for Last.fm scrobbling
 - Only scrobbles music you explicitly play
+- Automatically refreshes your Last.fm play count for convenience
+
+For detailed privacy information, see [PRIVACY.md](PRIVACY.md).
 
 ## Support
 

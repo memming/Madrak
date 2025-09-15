@@ -4,7 +4,7 @@
 
 import { Message, ExtensionSettings, LastFmUser } from '../shared/types';
 import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
-import { getSettings, saveSettings, log, getStoredLogs } from '../shared/utils';
+import { getSettings, log, getStoredLogs } from '../shared/utils';
 import { getDebugInfo, exportDebugLogs, clearDebugLogs, initializeLogger } from '../shared/logger';
 
 class PopupController {
@@ -38,6 +38,16 @@ class PopupController {
       
       // Update UI
       this.updateUI();
+      
+      // Always refresh user data if authenticated (after UI is set up)
+      if (this.user) {
+        setTimeout(() => {
+          this.handleRefreshUserData(false).catch(error => {
+            log('error', 'Auto-refresh failed (non-critical):', error);
+            // Don't show error to user for auto-refresh failures
+          });
+        }, 100);
+      }
       
       log('info', 'Popup initialized successfully');
     } catch (error) {
@@ -77,9 +87,10 @@ class PopupController {
     const disconnectButton = document.getElementById('disconnectButton');
     disconnectButton?.addEventListener('click', () => this.handleDisconnect());
 
-    // Pause button
-    const pauseButton = document.getElementById('pauseButton');
-    pauseButton?.addEventListener('click', () => this.handlePauseToggle());
+    // Refresh button
+    const refreshButton = document.getElementById('refreshButton');
+    refreshButton?.addEventListener('click', () => this.handleRefreshUserData(false));
+
 
     // Settings button
     const settingsButton = document.getElementById('settingsButton');
@@ -312,7 +323,7 @@ class PopupController {
 
     const userName = document.getElementById('userName');
     if (userName) {
-      userName.textContent = this.user.name;
+      userName.innerHTML = `<a href="https://last.fm/user/${this.user.name}" target="_blank" class="username-link">${this.user.name}</a>`;
     }
 
     const userPlaycount = document.getElementById('userPlaycount');
@@ -421,12 +432,12 @@ class PopupController {
 
     const trackTitle = document.getElementById('trackTitle');
     if (trackTitle) {
-      trackTitle.textContent = 'Not on YouTube Music';
+      trackTitle.innerHTML = '<a href="https://music.youtube.com" target="_blank" class="youtube-link">Open YouTube Music</a>';
     }
 
     const trackArtist = document.getElementById('trackArtist');
     if (trackArtist) {
-      trackArtist.textContent = 'Open YouTube Music to start scrobbling';
+      trackArtist.textContent = 'Start playing music to begin scrobbling';
     }
 
     const trackAlbum = document.getElementById('trackAlbum');
@@ -436,8 +447,8 @@ class PopupController {
 
     const trackArtwork = document.getElementById('trackArtwork') as HTMLImageElement;
     if (trackArtwork) {
-      trackArtwork.src = '';
-      trackArtwork.alt = '';
+      trackArtwork.src = chrome.runtime.getURL('assets/icon-128.png');
+      trackArtwork.alt = 'Madrak Extension';
     }
 
     // Update scrobble status to show info
@@ -448,7 +459,7 @@ class PopupController {
       
       if (statusIcon && statusText) {
         statusIcon.textContent = '🎵';
-        statusText.textContent = 'Go to music.youtube.com';
+        statusText.textContent = 'Ready to scrobble';
       }
     }
   }
@@ -660,27 +671,47 @@ class PopupController {
   }
 
   /**
-   * Handle pause toggle
+   * Handle refresh user data button click
    */
-  private async handlePauseToggle(): Promise<void> {
+  private async handleRefreshUserData(showErrors: boolean = true): Promise<void> {
     try {
-      if (!this.settings) return;
+      const refreshButton = document.getElementById('refreshButton') as HTMLButtonElement;
+      if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = '⟳';
+      }
 
-      this.settings.isEnabled = !this.settings.isEnabled;
-      await saveSettings(this.settings);
-
-      // Notify background script
-      await this.sendMessageToBackground({
-        type: MESSAGE_TYPES.SETTINGS_UPDATE,
-        data: { settings: this.settings }
+      const response = await this.sendMessageToBackground({
+        type: MESSAGE_TYPES.REFRESH_USER_DATA
       });
 
-      // Update UI
-      this.updateUI();
+      if (response.success) {
+        // Update local user data
+        this.user = response.userData;
+        
+        // Update UI with new data
+        this.updateUserInfo();
+        
+        log('info', 'User data refreshed successfully');
+      } else {
+        if (showErrors) {
+          this.showError(response.error || 'Failed to refresh user data');
+        }
+      }
     } catch (error) {
-      log('error', 'Failed to toggle pause:', error);
+      log('error', 'Failed to refresh user data:', error);
+      if (showErrors) {
+        this.showError('Failed to refresh user data');
+      }
+    } finally {
+      const refreshButton = document.getElementById('refreshButton') as HTMLButtonElement;
+      if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = '↻';
+      }
     }
   }
+
 
   /**
    * Handle settings button click
