@@ -4,6 +4,7 @@
 
 import { Track, ScrobbleData, YouTubeMusicTrack, ExtensionSettings } from './types';
 import { DEFAULT_SETTINGS } from './constants';
+import MD5 from 'blueimp-md5';
 
 /**
  * Generate a unique ID for tracking purposes
@@ -172,7 +173,6 @@ export function sleep(ms: number): Promise<void> {
  */
 export function generateMD5(text: string): string {
   // Use blueimp-md5 library since Web Crypto API doesn't support MD5
-  const MD5 = require('blueimp-md5');
   return MD5(text);
 }
 
