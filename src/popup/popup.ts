@@ -139,6 +139,9 @@ class PopupController {
         case 'AUTH_ERROR':
           this.handleAuthError(message.data);
           break;
+        case MESSAGE_TYPES.SETTINGS_UPDATE:
+          this.handleSettingsUpdate(message.data);
+          break;
         default:
           console.log('[Madrak] Popup: Unknown message type:', message.type);
       }
@@ -182,6 +185,32 @@ class PopupController {
     } catch (error) {
       console.error('[Madrak] Popup: Failed to handle auth error:', error);
       log('error', 'Failed to handle authentication error:', error);
+    }
+  }
+
+  /**
+   * Handle settings update
+   */
+  private async handleSettingsUpdate(data: any): Promise<void> {
+    try {
+      console.log('[Madrak] Popup: Settings updated', data);
+      log('info', 'Settings updated in popup', data);
+      
+      // Reload settings
+      this.settings = data.settings;
+      
+      // Refresh debug info if debug panel is open
+      const debugPanel = document.getElementById('debugPanel');
+      if (debugPanel && debugPanel.style.display !== 'none') {
+        this.refreshDebugInfo();
+      }
+      
+      // Update UI
+      this.updateUI();
+      
+    } catch (error) {
+      console.error('[Madrak] Popup: Failed to handle settings update:', error);
+      log('error', 'Failed to handle settings update:', error);
     }
   }
 
@@ -833,6 +862,17 @@ class PopupController {
     this.loadRecentLogs();
     this.loadErrorLogs();
     this.loadSystemInfo();
+  }
+
+  /**
+   * Refresh debug information (called when settings change)
+   */
+  private refreshDebugInfo(): void {
+    // Only refresh if debug panel is visible
+    const debugPanel = document.getElementById('debugPanel');
+    if (debugPanel && debugPanel.style.display !== 'none') {
+      this.loadSystemInfo();
+    }
   }
 
   /**

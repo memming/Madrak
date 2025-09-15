@@ -257,6 +257,15 @@ class BackgroundService {
     try {
       this.settings = data.settings;
       
+      // Re-initialize logger with new settings
+      if (this.settings) {
+        initializeLogger(this.settings);
+        debug('Logger re-initialized with new settings', {
+          debugMode: this.settings.debugMode,
+          logLevel: this.settings.logLevel
+        });
+      }
+      
       if (this.scrobbler && this.settings) {
         this.scrobbler.updateSettings(this.settings);
       }
