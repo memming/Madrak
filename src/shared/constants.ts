@@ -17,26 +17,26 @@ export const STORAGE_KEYS = {
 
 // YouTube Music selectors
 export const YOUTUBE_MUSIC_SELECTORS = {
-  // Track information
-  TRACK_TITLE: '[data-testid="entityTitle"]',
-  ARTIST_NAME: '[data-testid="byline"]',
-  ALBUM_NAME: '[data-testid="album"]',
+  // Track information - updated for actual YouTube Music DOM
+  TRACK_TITLE: 'ytmusic-player-bar .title',
+  ARTIST_NAME: 'ytmusic-player-bar .byline',
+  ALBUM_NAME: 'ytmusic-player-bar .subtitle',
   
   // Player controls
-  PLAY_BUTTON: '[data-testid="play-button"]',
-  PAUSE_BUTTON: '[data-testid="pause-button"]',
-  PLAYER_BAR: '[data-testid="progress-bar"]',
+  PLAY_BUTTON: 'ytmusic-play-button-renderer[state="paused"]',
+  PAUSE_BUTTON: 'ytmusic-play-button-renderer[state="playing"]',
+  PLAYER_BAR: 'ytmusic-player-bar',
   
   // Time information
-  CURRENT_TIME: '[data-testid="current-time"]',
-  DURATION: '[data-testid="duration"]',
+  CURRENT_TIME: 'ytmusic-player-bar .time-info .current-time',
+  DURATION: 'ytmusic-player-bar .time-info .duration',
   
   // Album art
-  ALBUM_ART: '[data-testid="album-art"] img',
+  ALBUM_ART: 'ytmusic-player-bar img',
   
   // Player state indicators
-  PLAYING_INDICATOR: '.playing',
-  PAUSED_INDICATOR: '.paused',
+  PLAYING_INDICATOR: 'ytmusic-play-button-renderer[state="playing"]',
+  PAUSED_INDICATOR: 'ytmusic-play-button-renderer[state="paused"]',
 } as const;
 
 // Last.fm API constants

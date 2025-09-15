@@ -2,6 +2,8 @@
  * Content script for YouTube Music integration
  */
 
+console.log('[Madrak] Content script loaded on:', window.location.href);
+
 import { YouTubeMusicTrack, Track, Message } from '../shared/types';
 import { YOUTUBE_MUSIC_SELECTORS, MESSAGE_TYPES } from '../shared/constants';
 import { convertYouTubeTrack, isSameTrack, log, debug, info, debounce } from '../shared/utils';
@@ -191,12 +193,25 @@ export class YouTubeMusicDetector {
           artistSelector: YOUTUBE_MUSIC_SELECTORS.ARTIST_NAME,
           albumSelector: YOUTUBE_MUSIC_SELECTORS.ALBUM_NAME
         },
+        // Check for YouTube Music specific elements
+        youtubeMusicElements: {
+          playerBar: !!document.querySelector('ytmusic-player-bar'),
+          playButton: !!document.querySelector('ytmusic-play-button-renderer'),
+          playButtonState: document.querySelector('ytmusic-play-button-renderer')?.getAttribute('state') || 'none',
+          anyTitle: document.querySelector('ytmusic-player-bar .title')?.textContent?.trim() || '',
+          anyByline: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || '',
+          anySubtitle: document.querySelector('ytmusic-player-bar .subtitle')?.textContent?.trim() || '',
+        },
         // Also check for alternative selectors
         alternativeSelectors: {
           titleAlt1: document.querySelector('h1[class*="title"]')?.textContent?.trim() || '',
           titleAlt2: document.querySelector('[class*="title"]')?.textContent?.trim() || '',
           artistAlt1: document.querySelector('[class*="byline"]')?.textContent?.trim() || '',
           artistAlt2: document.querySelector('[class*="subtitle"]')?.textContent?.trim() || '',
+          // Check for any text that might be track info
+          allText: Array.from(document.querySelectorAll('*')).filter(el => 
+            el.textContent && el.textContent.trim().length > 0 && el.textContent.trim().length < 100
+          ).slice(0, 10).map(el => el.textContent?.trim()).filter(Boolean)
         }
       });
 
@@ -500,8 +515,11 @@ let detector: YouTubeMusicDetector | null = null;
 
 function initializeDetector() {
   try {
+    console.log('[Madrak] Content script: Initializing YouTube Music detector');
+    log('info', 'Content script: Initializing YouTube Music detector');
     detector = new YouTubeMusicDetector();
   } catch (error) {
+    console.error('[Madrak] Content script: Failed to initialize detector:', error);
     log('error', 'Failed to initialize YouTube Music detector:', error);
   }
 }
