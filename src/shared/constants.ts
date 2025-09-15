@@ -3,7 +3,7 @@
  */
 
 export const EXTENSION_NAME = 'Madrak';
-export const EXTENSION_VERSION = '1.0.0';
+export const EXTENSION_VERSION = '0.3.0';
 
 // Chrome extension storage keys
 export const STORAGE_KEYS = {

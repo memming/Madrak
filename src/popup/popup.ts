@@ -942,7 +942,7 @@ class PopupController {
       systemInfo.innerHTML = `
         <div class="info-item">
           <span class="info-label">Extension Version</span>
-          <span class="info-value">1.0.0</span>
+          <span class="info-value">0.3.0</span>
         </div>
         <div class="info-item">
           <span class="info-label">User Agent</span>
