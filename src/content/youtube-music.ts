@@ -221,15 +221,73 @@ export class YouTubeMusicDetector {
         return null;
       }
 
-      // Get duration
-      const durationElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.DURATION);
-      const durationText = durationElement?.textContent?.trim() || '0:00';
-      const duration = this.parseDuration(durationText);
+      // Get duration with multiple fallback selectors
+      let durationElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.DURATION);
+      let durationText = durationElement?.textContent?.trim() || '';
+      
+      // If no duration found with primary selector, try fallbacks
+      if (!durationText) {
+        // Try alternative selectors for duration
+        const fallbackSelectors = [
+          'ytmusic-player-bar .time-info span:last-child',
+          'ytmusic-player-bar .time-info .duration',
+          'ytmusic-player-bar .time-info span[class*="duration"]',
+          'ytmusic-player-bar [class*="duration"]',
+          'ytmusic-player-bar .time-info',
+          'ytmusic-player-bar'
+        ];
+        
+        for (const selector of fallbackSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            const text = element.textContent?.trim() || '';
+            // Look for time pattern in the text
+            const timeMatch = text.match(/\d+:\d+/g);
+            if (timeMatch && timeMatch.length > 0) {
+              // If multiple times found, take the last one (usually duration)
+              durationText = timeMatch[timeMatch.length - 1] || '';
+              durationElement = element;
+              break;
+            }
+          }
+        }
+      }
+      
+      const duration = this.parseDuration(durationText || '0:00');
 
-      // Get current time
-      const currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
-      const currentTimeText = currentTimeElement?.textContent?.trim() || '0:00';
-      const currentTime = this.parseDuration(currentTimeText);
+      // Get current time with multiple fallback selectors
+      let currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
+      let currentTimeText = currentTimeElement?.textContent?.trim() || '';
+      
+      // If no current time found with primary selector, try fallbacks
+      if (!currentTimeText) {
+        // Try alternative selectors for current time
+        const fallbackSelectors = [
+          'ytmusic-player-bar .time-info span:first-child',
+          'ytmusic-player-bar .time-info .current-time',
+          'ytmusic-player-bar .time-info span[class*="current"]',
+          'ytmusic-player-bar [class*="current"]',
+          'ytmusic-player-bar .time-info',
+          'ytmusic-player-bar'
+        ];
+        
+        for (const selector of fallbackSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            const text = element.textContent?.trim() || '';
+            // Look for time pattern in the text
+            const timeMatch = text.match(/\d+:\d+/g);
+            if (timeMatch && timeMatch.length > 0) {
+              // If multiple times found, take the first one (usually current time)
+              currentTimeText = timeMatch[0] || '';
+              currentTimeElement = element;
+              break;
+            }
+          }
+        }
+      }
+      
+      const currentTime = this.parseDuration(currentTimeText || '0:00');
 
       // Debug duration parsing
       debug('Duration parsing debug', {
@@ -246,7 +304,16 @@ export class YouTubeMusicDetector {
           timeInfo: document.querySelector('ytmusic-player-bar .time-info')?.textContent?.trim() || '',
           allSpans: Array.from(document.querySelectorAll('ytmusic-player-bar .time-info span')).map(s => s.textContent?.trim()).filter(Boolean),
           anyTimeText: document.querySelector('ytmusic-player-bar')?.textContent?.match(/\d+:\d+/g) || []
-        }
+        },
+        // Check for time elements in different locations
+        playerBarText: document.querySelector('ytmusic-player-bar')?.textContent?.trim() || '',
+        allTimeElements: Array.from(document.querySelectorAll('*')).filter(el => 
+          el.textContent && /\d+:\d+/.test(el.textContent)
+        ).slice(0, 5).map(el => ({
+          tagName: el.tagName,
+          className: el.className,
+          textContent: el.textContent?.trim()
+        }))
       });
 
       // Check if playing
@@ -405,12 +472,72 @@ export class YouTubeMusicDetector {
    * Parse duration string to seconds
    */
   private parseDuration(durationStr: string): number {
-    const parts = durationStr.split(':').map(Number);
-    if (parts.length === 2) {
-      return (parts[0] || 0) * 60 + (parts[1] || 0);
-    } else if (parts.length === 3) {
-      return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+    if (!durationStr || durationStr.trim() === '') {
+      return 0;
     }
+    
+    // Clean the string - remove any non-numeric characters except colons
+    const cleaned = durationStr.replace(/[^\d:]/g, '').trim();
+    
+    if (!cleaned) {
+      return 0;
+    }
+    
+    const parts = cleaned.split(':').map(Number);
+    
+    // Handle different time formats
+    if (parts.length === 2) {
+      // MM:SS format
+      const minutes = parts[0] || 0;
+      const seconds = parts[1] || 0;
+      const totalSeconds = minutes * 60 + seconds;
+      
+      debug('Parsed duration (MM:SS)', {
+        original: durationStr,
+        cleaned: cleaned,
+        minutes: minutes,
+        seconds: seconds,
+        totalSeconds: totalSeconds
+      });
+      
+      return totalSeconds;
+    } else if (parts.length === 3) {
+      // HH:MM:SS format
+      const hours = parts[0] || 0;
+      const minutes = parts[1] || 0;
+      const seconds = parts[2] || 0;
+      const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+      
+      debug('Parsed duration (HH:MM:SS)', {
+        original: durationStr,
+        cleaned: cleaned,
+        hours: hours,
+        minutes: minutes,
+        seconds: seconds,
+        totalSeconds: totalSeconds
+      });
+      
+      return totalSeconds;
+    } else if (parts.length === 1) {
+      // Just seconds
+      const seconds = parts[0] || 0;
+      
+      debug('Parsed duration (seconds only)', {
+        original: durationStr,
+        cleaned: cleaned,
+        seconds: seconds
+      });
+      
+      return seconds;
+    }
+    
+    debug('Failed to parse duration', {
+      original: durationStr,
+      cleaned: cleaned,
+      parts: parts,
+      partsLength: parts.length
+    });
+    
     return 0;
   }
 

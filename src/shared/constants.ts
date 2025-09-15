@@ -27,9 +27,9 @@ export const YOUTUBE_MUSIC_SELECTORS = {
   PAUSE_BUTTON: 'ytmusic-play-button-renderer[state="playing"]',
   PLAYER_BAR: 'ytmusic-player-bar',
   
-  // Time information
-  CURRENT_TIME: 'ytmusic-player-bar .time-info .current-time, ytmusic-player-bar .time-info span:first-child',
-  DURATION: 'ytmusic-player-bar .time-info .duration, ytmusic-player-bar .time-info span:last-child',
+  // Time information - updated with better fallback selectors
+  CURRENT_TIME: 'ytmusic-player-bar .time-info .current-time, ytmusic-player-bar .time-info span:first-child, ytmusic-player-bar .time-info span[class*="current"]',
+  DURATION: 'ytmusic-player-bar .time-info .duration, ytmusic-player-bar .time-info span:last-child, ytmusic-player-bar .time-info span[class*="duration"]',
   
   // Album art
   ALBUM_ART: 'ytmusic-player-bar img',
