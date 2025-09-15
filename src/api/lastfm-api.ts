@@ -88,19 +88,40 @@ export class LastFmApi {
       });
     }
 
-    const url = `${LASTFM_API_ENDPOINTS.API}?${createQueryString(requestParams)}`;
+    // Determine if this method requires POST
+    const requiresPost = ['track.updateNowPlaying', 'track.scrobble'].includes(method);
+    
+    let url: string;
+    let fetchOptions: RequestInit = {};
+    
+    if (requiresPost) {
+      // Use POST for track.updateNowPlaying and track.scrobble
+      url = LASTFM_API_ENDPOINTS.API;
+      fetchOptions = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: createQueryString(requestParams)
+      };
+    } else {
+      // Use GET for other methods
+      url = `${LASTFM_API_ENDPOINTS.API}?${createQueryString(requestParams)}`;
+    }
     
     debug('Making Last.fm API request', {
       method,
       url: url.replace(this.apiKey, '[API_KEY]'), // Hide API key in logs
       params: { ...requestParams, api_key: '[API_KEY]' }, // Hide API key in params
       authenticated,
-      hasSession: !!this.session
+      hasSession: !!this.session,
+      requiresPost,
+      httpMethod: requiresPost ? 'POST' : 'GET'
     });
     
     try {
       const startTime = Date.now();
-      const response = await fetch(url);
+      const response = await fetch(url, fetchOptions);
       const requestDuration = Date.now() - startTime;
       
       debug('API response received', {

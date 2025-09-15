@@ -3,7 +3,7 @@
  */
 
 import { ExtensionSettings, LastFmUser } from '../shared/types';
-import { STORAGE_KEYS, DEFAULT_SETTINGS } from '../shared/constants';
+import { STORAGE_KEYS, DEFAULT_SETTINGS, MESSAGE_TYPES } from '../shared/constants';
 import { getSettings, saveSettings, log } from '../shared/utils';
 
 class OptionsController {
@@ -191,7 +191,7 @@ class OptionsController {
     try {
       // Get queue stats from background script
       const response = await this.sendMessageToBackground({
-        type: 'GET_QUEUE_STATS'
+        type: MESSAGE_TYPES.GET_QUEUE_STATS
       });
 
       if (response?.stats) {
@@ -242,7 +242,7 @@ class OptionsController {
       
       // Notify background script
       await this.sendMessageToBackground({
-        type: 'SETTINGS_UPDATE',
+        type: MESSAGE_TYPES.SETTINGS_UPDATE,
         data: { settings: this.settings }
       });
       
@@ -272,7 +272,7 @@ class OptionsController {
       if (this.user) {
         // Disconnect
         await this.sendMessageToBackground({
-          type: 'LOGOUT'
+          type: MESSAGE_TYPES.LOGOUT
         });
         
         this.user = null;
@@ -281,7 +281,7 @@ class OptionsController {
       } else {
         // Connect
         const response = await this.sendMessageToBackground({
-          type: 'START_AUTH'
+          type: MESSAGE_TYPES.START_AUTH
         });
 
         if (response?.authUrl) {
@@ -301,7 +301,7 @@ class OptionsController {
     try {
       if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
         await this.sendMessageToBackground({
-          type: 'CLEAR_ALL_DATA'
+          type: MESSAGE_TYPES.CLEAR_ALL_DATA
         });
         
         // Reset to defaults
