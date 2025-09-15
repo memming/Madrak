@@ -2,7 +2,7 @@
  * Background service worker for Last.fm Scrobbler
  */
 
-import { Message, Track, ExtensionSettings } from '../shared/types';
+import { Message, Track, ExtensionSettings, YouTubeMusicTrack } from '../shared/types';
 import { MESSAGE_TYPES } from '../shared/constants';
 import { getSettings, log, debug, info, showNotification } from '../shared/utils';
 import { initializeLogger, logSystemInfo } from '../shared/logger';
@@ -16,6 +16,9 @@ class BackgroundService {
   private authTabId: number | undefined;
   private authSendResponse: ((response?: any) => void) | undefined;
   private storedToken: string | undefined;
+  private currentTrack: Track | null = null;
+  private youtubeTrack: YouTubeMusicTrack | null = null;
+  private activeTabId: number | null = null;
   // Removed unused isInitialized property
 
   constructor() {
@@ -92,7 +95,7 @@ class BackgroundService {
   /**
    * Handle messages from content scripts and popup
    */
-  private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean {
+  private handleMessage(message: Message, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean {
     log('info', 'Received message:', message.type);
 
     switch (message.type) {
@@ -101,7 +104,7 @@ class BackgroundService {
         sendResponse({ success: true, pong: true });
         return false; // Response sent synchronously
       case MESSAGE_TYPES.TRACK_DETECTED:
-        this.handleTrackDetected(message.data);
+        this.handleTrackDetected(message.data, sender);
         break;
       case MESSAGE_TYPES.TRACK_ENDED:
         this.handleTrackEnded(message.data);
@@ -130,6 +133,9 @@ class BackgroundService {
       case MESSAGE_TYPES.GET_DEBUG_INFO:
         this.handleGetDebugInfo(sendResponse);
         return true; // Response will be sent asynchronously
+      case MESSAGE_TYPES.GET_CURRENT_TRACK:
+        this.handleGetCurrentTrack(sendResponse);
+        return true; // Response will be sent asynchronously
       case MESSAGE_TYPES.EXPORT_LOGS:
         this.handleExportLogs(sendResponse);
         return true; // Response will be sent asynchronously
@@ -148,14 +154,18 @@ class BackgroundService {
   /**
    * Handle track detected message
    */
-  private async handleTrackDetected(_data: any): Promise<void> {
+  private async handleTrackDetected(data: any, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
+      this.currentTrack = data.track;
+      this.youtubeTrack = data.youtubeTrack;
+      this.activeTabId = sender.tab?.id ?? null;
+
       if (!this.scrobbler || !this.settings?.isEnabled) {
         return;
       }
 
-      const track: Track = _data.track;
-      const isNowPlaying = _data.isNowPlaying || false;
+      const track: Track = data.track;
+      const isNowPlaying = data.isNowPlaying || false;
 
       if (isNowPlaying) {
         // Update now playing status
@@ -173,6 +183,10 @@ class BackgroundService {
    */
   private async handleTrackEnded(_data: any): Promise<void> {
     try {
+      this.currentTrack = null;
+      this.youtubeTrack = null;
+      this.activeTabId = null;
+
       if (!this.scrobbler || !this.settings?.isEnabled) {
         return;
       }
@@ -291,9 +305,29 @@ class BackgroundService {
   /**
    * Handle tab updates
    */
-  private handleTabUpdated(_tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab): void {
+  private handleTabUpdated(tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab): void {
+    if (tabId === this.activeTabId && changeInfo.status === 'loading') {
+      if (!tab.url?.includes('music.youtube.com')) {
+        log('info', 'YouTube Music tab navigated away, clearing current track');
+        this.currentTrack = null;
+        this.youtubeTrack = null;
+        this.activeTabId = null;
+      }
+    }
     if (changeInfo.status === 'complete' && tab.url?.includes('music.youtube.com')) {
       log('info', 'YouTube Music tab loaded');
+    }
+  }
+
+  /**
+   * Handle tab removal
+   */
+  private handleTabRemoved(tabId: number): void {
+    if (tabId === this.activeTabId) {
+      log('info', 'YouTube Music tab closed, clearing current track');
+      this.currentTrack = null;
+      this.youtubeTrack = null;
+      this.activeTabId = null;
     }
   }
 
@@ -577,6 +611,28 @@ class BackgroundService {
     }
   }
 
+  /**
+   * Handle get current track request from popup
+   */
+  private handleGetCurrentTrack(sendResponse: (response?: any) => void): void {
+    try {
+      if (this.currentTrack && this.youtubeTrack) {
+        sendResponse({
+          success: true,
+          track: this.currentTrack,
+          isPlaying: this.youtubeTrack.isPlaying,
+          currentTime: this.youtubeTrack.currentTime,
+          thumbnail: this.youtubeTrack.thumbnail,
+        });
+      } else {
+        sendResponse({ success: true, track: null, isPlaying: false });
+      }
+    } catch (error) {
+      log('error', 'Failed to get current track:', error);
+      sendResponse({ success: false, error: 'Failed to get current track' });
+    }
+  }
+
 
   /**
    * Handle get queue stats request
@@ -701,6 +757,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   backgroundService['handleContextMenuClick'](info, tab);
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  backgroundService['handleTabRemoved'](tabId);
 });
 
 chrome.runtime.onSuspend.addListener(() => {
