@@ -27,6 +27,12 @@ export class YouTubeMusicDetector {
       timestamp: Date.now()
     });
     
+    // Check if extension context is valid
+    if (!this.isExtensionContextValid()) {
+      log('warn', 'Extension context invalidated, skipping initialization');
+      return;
+    }
+    
     // Start observing DOM changes
     this.startObserving();
     
@@ -34,9 +40,14 @@ export class YouTubeMusicDetector {
     this.detectCurrentTrack();
     
     // Listen for messages from background script
-    chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
-      this.handleMessage(message, sender, sendResponse);
-    });
+    try {
+      chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+        this.handleMessage(message, sender, sendResponse);
+      });
+    } catch (error) {
+      log('error', 'Failed to set up message listener:', error);
+      return;
+    }
 
     info('YouTube Music detector initialized successfully');
   }
@@ -45,6 +56,11 @@ export class YouTubeMusicDetector {
    * Start observing DOM changes
    */
   private startObserving(): void {
+    if (!this.isExtensionContextValid()) {
+      log('warn', 'Extension context invalidated, cannot start observing');
+      return;
+    }
+
     this.observer = new MutationObserver((mutations) => {
       let shouldCheck = false;
       
@@ -334,18 +350,44 @@ export class YouTubeMusicDetector {
   }
 
   /**
+   * Check if extension context is valid
+   */
+  private isExtensionContextValid(): boolean {
+    try {
+      return !!(chrome && chrome.runtime && chrome.runtime.id);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * Send message to background script
    */
   private sendMessage(message: Message): void {
-    chrome.runtime.sendMessage(message).catch((error) => {
-      log('error', 'Failed to send message:', error);
-    });
+    if (!this.isExtensionContextValid()) {
+      log('warn', 'Extension context invalidated, cannot send message:', message.type);
+      return;
+    }
+
+    try {
+      chrome.runtime.sendMessage(message).catch((error) => {
+        log('error', 'Failed to send message:', error);
+      });
+    } catch (error) {
+      log('error', 'Failed to send message - extension context invalidated:', error);
+    }
   }
 
   /**
    * Handle messages from background script
    */
   private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
+    if (!this.isExtensionContextValid()) {
+      log('warn', 'Extension context invalidated, ignoring message:', message.type);
+      sendResponse();
+      return;
+    }
+
     switch (message.type) {
       case MESSAGE_TYPES.SETTINGS_UPDATE:
         // Settings were updated, we might need to re-evaluate current track
@@ -371,10 +413,29 @@ export class YouTubeMusicDetector {
 }
 
 // Initialize the detector when the script loads
+let detector: YouTubeMusicDetector | null = null;
+
+function initializeDetector() {
+  try {
+    detector = new YouTubeMusicDetector();
+  } catch (error) {
+    log('error', 'Failed to initialize YouTube Music detector:', error);
+  }
+}
+
+// Add global error handler for extension context invalidation
+window.addEventListener('error', (event) => {
+  if (event.error && event.error.message && event.error.message.includes('Extension context invalidated')) {
+    log('warn', 'Extension context invalidated, cleaning up detector');
+    if (detector) {
+      detector.destroy();
+      detector = null;
+    }
+  }
+});
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    new YouTubeMusicDetector();
-  });
+  document.addEventListener('DOMContentLoaded', initializeDetector);
 } else {
-  new YouTubeMusicDetector();
+  initializeDetector();
 }
