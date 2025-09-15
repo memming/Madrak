@@ -37,8 +37,10 @@ export class AuthManager {
    */
   async startAuth(): Promise<string> {
     try {
-      const authUrl = this.api.getAuthUrl();
-      log('info', 'Starting authentication flow');
+      log('info', 'Starting authentication flow - getting token from Last.fm');
+      const token = await this.api.getToken();
+      const authUrl = this.api.getAuthUrl(token);
+      log('info', 'Generated authentication URL with token');
       return authUrl;
     } catch (error) {
       log('error', 'Failed to start authentication:', error);

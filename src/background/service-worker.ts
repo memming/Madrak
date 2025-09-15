@@ -13,6 +13,9 @@ class BackgroundService {
   private authManager: AuthManager;
   private scrobbler: Scrobbler | null = null;
   private settings: ExtensionSettings | null = null;
+  private authTabId: number | undefined;
+  private authSendResponse: ((response?: any) => void) | undefined;
+  private storedToken: string | undefined;
   // Removed unused isInitialized property
 
   constructor() {
@@ -354,97 +357,51 @@ class BackgroundService {
   }
 
   /**
-   * Handle start authentication request using Chrome identity API
+   * Handle start authentication request - get token and open Last.fm auth page
    */
   private async handleStartAuth(sendResponse: (response?: any) => void): Promise<void> {
     try {
-      console.log('[Madrak] Background: Starting Chrome identity authentication flow');
-      log('info', 'Starting Chrome identity authentication flow');
+      console.log('[Madrak] Background: Starting Last.fm authentication flow');
+      log('info', 'Starting Last.fm authentication flow');
       
-      // Check if chrome.identity is available
-      if (typeof chrome === 'undefined' || !chrome.identity) {
-        console.error('[Madrak] Background: chrome.identity not available');
-        log('error', 'chrome.identity API not available');
-        sendResponse({ success: false, error: 'Chrome identity API not available' });
-        return;
-      }
+      // Get token from Last.fm API
+      console.log('[Madrak] Background: Getting token from Last.fm API');
+      log('info', 'Getting token from Last.fm API');
+      const token = await this.authManager.getApi().getToken();
       
-      // Generate auth URL
-      const authUrl = this.authManager.getApi().getAuthUrl();
+      console.log('[Madrak] Background: Received token, generating auth URL');
+      log('info', 'Received token from Last.fm API', { 
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 10) + '...'
+      });
+      
+      // Generate auth URL with token
+      const authUrl = this.authManager.getApi().getAuthUrl(token);
       console.log('[Madrak] Background: Generated auth URL:', authUrl);
-      log('info', 'Generated authentication URL for Chrome identity flow', { authUrl });
+      log('info', 'Generated authentication URL with token', { authUrl });
       
-      // Launch Chrome identity web auth flow
-      chrome.identity.launchWebAuthFlow(
-        {
-          url: authUrl,
-          interactive: true
-        },
-        async (redirectUrl) => {
-          try {
-            if (chrome.runtime.lastError) {
-              console.error('[Madrak] Background: Chrome identity error:', chrome.runtime.lastError);
-              log('error', 'Chrome identity authentication failed', { error: chrome.runtime.lastError });
-              sendResponse({ success: false, error: chrome.runtime.lastError.message });
-              return;
-            }
-            
-            if (!redirectUrl) {
-              console.error('[Madrak] Background: No redirect URL received');
-              log('error', 'No redirect URL received from Chrome identity');
-              sendResponse({ success: false, error: 'No redirect URL received' });
-              return;
-            }
-            
-            console.log('[Madrak] Background: Received redirect URL:', redirectUrl);
-            log('info', 'Received redirect URL from Chrome identity', { redirectUrl });
-            
-            // Extract token from redirect URL
-            const url = new URL(redirectUrl);
-            const token = url.searchParams.get('token');
-            
-            if (!token) {
-              console.error('[Madrak] Background: No token found in redirect URL');
-              log('error', 'No token found in redirect URL', { redirectUrl });
-              sendResponse({ success: false, error: 'No token found in redirect URL' });
-              return;
-            }
-            
-            console.log('[Madrak] Background: Found token, completing authentication');
-            log('info', 'Found token in redirect URL, completing authentication', { 
-              tokenLength: token.length,
-              tokenPreview: token.substring(0, 10) + '...'
-            });
-            
-            // Complete authentication
-            const session = await this.authManager.completeAuth(token);
-            
-            console.log('[Madrak] Background: Authentication completed successfully');
-            log('info', 'Authentication completed successfully', { 
-              username: session.name,
-              sessionKey: session.key ? '[PRESENT]' : '[MISSING]'
-            });
-            
-            // Initialize scrobbler with new session
-            if (this.settings) {
-              this.scrobbler = new Scrobbler(this.authManager.getApi(), this.settings);
-              await this.scrobbler.initialize();
-              console.log('[Madrak] Background: Scrobbler initialized successfully');
-              log('info', 'Scrobbler initialized with authenticated session');
-            }
-            
-            sendResponse({ success: true, session });
-            
-          } catch (error) {
-            console.error('[Madrak] Background: Failed to complete authentication:', error);
-            log('error', 'Failed to complete authentication', { error });
-            sendResponse({ 
-              success: false, 
-              error: error instanceof Error ? error.message : 'Failed to complete authentication' 
-            });
-          }
+      // Store token for later use
+      this.storedToken = token;
+      
+      // Open Last.fm authentication page in a new tab
+      chrome.tabs.create({ url: authUrl }, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Madrak] Background: Failed to open auth tab:', chrome.runtime.lastError);
+          log('error', 'Failed to open authentication tab', { error: chrome.runtime.lastError });
+          sendResponse({ success: false, error: 'Failed to open authentication tab' });
+          return;
         }
-      );
+        
+        console.log('[Madrak] Background: Opened authentication tab:', tab?.id);
+        log('info', 'Opened authentication tab', { tabId: tab?.id });
+        
+        // Store the tab ID and sendResponse for callback handling
+        this.authTabId = tab?.id;
+        this.authSendResponse = sendResponse;
+        
+        // Send immediate response that tab was opened
+        sendResponse({ success: true, message: 'Authentication tab opened' });
+      });
       
     } catch (error) {
       console.error('[Madrak] Background: Failed to start authentication:', error);
@@ -453,6 +410,73 @@ class BackgroundService {
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to start authentication' 
       });
+    }
+  }
+
+  /**
+   * Handle Last.fm authentication callback - user has authorized the app
+   */
+  private async handleAuthCallback(tabId: number): Promise<void> {
+    try {
+      console.log('[Madrak] Background: Handling Last.fm authentication callback');
+      log('info', 'Handling Last.fm authentication callback', { 
+        hasStoredToken: !!this.storedToken,
+        tabId
+      });
+      
+      if (!this.storedToken) {
+        throw new Error('No stored token found for authentication');
+      }
+      
+      // Complete authentication using stored token
+      const session = await this.authManager.completeAuth(this.storedToken);
+      
+      console.log('[Madrak] Background: Authentication completed successfully');
+      log('info', 'Authentication completed successfully', { 
+        username: session.name,
+        sessionKey: session.key ? '[PRESENT]' : '[MISSING]'
+      });
+      
+      // Initialize scrobbler with new session
+      if (this.settings) {
+        this.scrobbler = new Scrobbler(this.authManager.getApi(), this.settings);
+        await this.scrobbler.initialize();
+        console.log('[Madrak] Background: Scrobbler initialized successfully');
+        log('info', 'Scrobbler initialized with authenticated session');
+      }
+      
+      // Close the authentication tab
+      if (tabId) {
+        chrome.tabs.remove(tabId);
+        console.log('[Madrak] Background: Closed authentication tab');
+      }
+      
+      // Send success response if we have a pending response
+      if (this.authSendResponse) {
+        this.authSendResponse({ success: true, session });
+        this.authSendResponse = undefined;
+      }
+      
+      // Clear auth state
+      this.authTabId = undefined;
+      this.storedToken = undefined;
+      
+    } catch (error) {
+      console.error('[Madrak] Background: Failed to handle auth callback:', error);
+      log('error', 'Failed to handle authentication callback', { error });
+      
+      // Send error response if we have a pending response
+      if (this.authSendResponse) {
+        this.authSendResponse({ 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to complete authentication' 
+        });
+        this.authSendResponse = undefined;
+      }
+      
+      // Clear auth state
+      this.authTabId = undefined;
+      this.storedToken = undefined;
     }
   }
 
@@ -635,8 +659,17 @@ chrome.runtime.onInstalled.addListener((details) => {
   backgroundService['createContextMenu']();
 });
 
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-  backgroundService['handleTabUpdated'](_tabId, changeInfo, tab);
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  backgroundService['handleTabUpdated'](tabId, changeInfo, tab);
+  
+  // Check for Last.fm authentication callback - user has returned from Last.fm
+  if (changeInfo.status === 'complete' && tab.url && tabId === backgroundService['authTabId']) {
+    // Check if user is on Last.fm domain (they've completed authorization)
+    if (tab.url.includes('last.fm') || tab.url.includes('lastfm.com')) {
+      console.log('[Madrak] Background: Detected user returned from Last.fm authorization');
+      backgroundService['handleAuthCallback'](tabId);
+    }
+  }
 });
 
 // Note: Authentication callback handling removed - now using manual token entry

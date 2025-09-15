@@ -230,39 +230,69 @@ export class LastFmApi {
   }
 
   /**
-   * Get authentication URL for Chrome identity flow
+   * Get a token from Last.fm API
    */
-  getAuthUrl(): string {
+  async getToken(): Promise<string> {
     try {
-      debug('Getting authentication URL for Chrome identity flow', {
-        hasChromeIdentity: typeof chrome !== 'undefined' && !!chrome.identity,
+      debug('Getting token from Last.fm API', {
         apiKey: this.apiKey ? '[PRESENT]' : '[MISSING]',
-        authEndpoint: LASTFM_API_ENDPOINTS.AUTH
+        apiUrl: LASTFM_API_ENDPOINTS.API
       });
 
-      // Use Chrome's redirect URL for OAuth
-      let callbackUrl = 'https://madrak-extension.com/callback';
-      
-      if (typeof chrome !== 'undefined' && chrome.identity) {
-        try {
-          callbackUrl = chrome.identity.getRedirectURL();
-          debug('Using Chrome identity redirect URL', { callbackUrl });
-        } catch (identityError) {
-          debug('Failed to get Chrome redirect URL, using fallback', { error: identityError });
-        }
-      }
-
       const params = {
+        method: 'auth.gettoken',
         api_key: this.apiKey,
-        cb: callbackUrl,
+        format: 'json'
       };
 
       const queryString = createQueryString(params);
-      const authUrl = `${LASTFM_API_ENDPOINTS.AUTH}?${queryString}`;
+      const url = `${LASTFM_API_ENDPOINTS.API}?${queryString}`;
+
+      debug('Making token request to Last.fm', { url: url.replace(this.apiKey, '[API_KEY]') });
+
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(`Last.fm API error: ${data.message || 'Unknown error'}`);
+      }
+
+      if (!data.token) {
+        throw new Error('No token received from Last.fm API');
+      }
+
+      debug('Successfully received token from Last.fm', {
+        tokenLength: data.token.length,
+        tokenPreview: data.token.substring(0, 10) + '...'
+      });
+
+      return data.token;
+    } catch (err) {
+      error('Failed to get token from Last.fm API', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Get authentication URL for Last.fm using token
+   */
+  getAuthUrl(token: string): string {
+    try {
+      debug('Generating authentication URL with token', {
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 10) + '...',
+        apiKey: this.apiKey ? '[PRESENT]' : '[MISSING]'
+      });
+
+      const authUrl = `${LASTFM_API_ENDPOINTS.AUTH}?api_key=${this.apiKey}&token=${token}`;
 
       debug('Generated authentication URL', {
-        authUrl: authUrl.replace(this.apiKey, '[API_KEY]'),
-        params: { ...params, api_key: '[API_KEY]' }
+        authUrl: authUrl.replace(this.apiKey, '[API_KEY]').replace(token, '[TOKEN]')
       });
 
       return authUrl;
@@ -281,7 +311,7 @@ export class LastFmApi {
     };
 
     try {
-      const response = await this.makeRequest<any>('auth.getSession', params);
+      const response = await this.makeRequest<any>('auth.getsession', params);
       
       if (!response.session) {
         throw new Error('Authentication failed');
