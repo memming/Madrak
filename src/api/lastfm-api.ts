@@ -65,14 +65,19 @@ export class LastFmApi {
       ...params,
     };
 
-    if (authenticated && this.session) {
-      (requestParams as any).sk = this.session.key;
+    if (authenticated) {
+      // For auth.getsession, we don't have a session yet, so don't add sk
+      if (this.session && method !== 'auth.getsession') {
+        (requestParams as any).sk = this.session.key;
+      }
+      
       const signature = await this.generateSignature(requestParams);
       (requestParams as any).api_sig = signature;
       debug('Generated API signature for authenticated request', { 
         method, 
         hasSession: !!this.session,
-        signatureLength: signature.length 
+        signatureLength: signature.length,
+        isAuthGetSession: method === 'auth.getsession'
       });
     }
 
@@ -311,7 +316,8 @@ export class LastFmApi {
     };
 
     try {
-      const response = await this.makeRequest<any>('auth.getsession', params);
+      // auth.getsession requires signing, so we need to use authenticated: true
+      const response = await this.makeRequest<any>('auth.getsession', params, true);
       
       if (!response.session) {
         throw new Error('Authentication failed');
