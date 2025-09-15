@@ -367,11 +367,15 @@ class PopupController {
       // Send message to content script to get current track
       if (tab?.id) {
         const response = await chrome.tabs.sendMessage(tab.id, {
-          type: 'GET_CURRENT_TRACK'
+          type: MESSAGE_TYPES.GET_CURRENT_TRACK
         });
 
-        if (response?.track) {
-          this.showCurrentTrack(response.track);
+        if (response?.success && response?.track) {
+          this.showCurrentTrack(response.track, {
+            isPlaying: response.isPlaying,
+            currentTime: response.currentTime,
+            thumbnail: response.thumbnail
+          });
         } else {
           this.hideCurrentTrack();
         }
@@ -385,7 +389,7 @@ class PopupController {
   /**
    * Show current track section
    */
-  private showCurrentTrack(track: any): void {
+  private showCurrentTrack(track: any, additionalInfo?: { isPlaying?: boolean; currentTime?: number; thumbnail?: string }): void {
     const section = document.getElementById('currentTrackSection');
     if (section) {
       section.style.display = 'block';
@@ -407,13 +411,16 @@ class PopupController {
     }
 
     const trackArtwork = document.getElementById('trackArtwork') as HTMLImageElement;
-    if (trackArtwork && track.thumbnail) {
-      trackArtwork.src = track.thumbnail;
-      trackArtwork.alt = `${track.title} artwork`;
+    if (trackArtwork) {
+      const thumbnail = additionalInfo?.thumbnail || track.thumbnail;
+      if (thumbnail) {
+        trackArtwork.src = thumbnail;
+        trackArtwork.alt = `${track.title} artwork`;
+      }
     }
 
-    // Update scrobble status
-    this.updateScrobbleStatus(track);
+    // Update scrobble status with additional info
+    this.updateScrobbleStatus(track, additionalInfo);
   }
 
   /**
@@ -429,7 +436,7 @@ class PopupController {
   /**
    * Update scrobble status
    */
-  private updateScrobbleStatus(track: any): void {
+  private updateScrobbleStatus(track: any, additionalInfo?: { isPlaying?: boolean; currentTime?: number; thumbnail?: string }): void {
     const statusElement = document.getElementById('scrobbleStatus');
     if (!statusElement) return;
 
@@ -438,13 +445,19 @@ class PopupController {
 
     if (!statusIcon || !statusText) return;
 
+    // Use additional info if available, otherwise fall back to track data
+    const currentTime = additionalInfo?.currentTime ?? track.currentTime ?? 0;
+    const isPlaying = additionalInfo?.isPlaying ?? track.isPlaying ?? false;
+
     // Check if track meets scrobbling requirements
     const minLength = this.settings?.minTrackLength || 30;
     const threshold = this.settings?.scrobbleThreshold || 50;
     const duration = track.duration || 0;
-    const currentTime = track.currentTime || 0;
 
-    if (duration < minLength) {
+    if (!isPlaying) {
+      statusIcon.textContent = '⏸️';
+      statusText.textContent = 'Paused';
+    } else if (duration < minLength) {
       statusIcon.textContent = '⏱️';
       statusText.textContent = 'Track too short to scrobble';
     } else if (currentTime / duration < threshold / 100) {

@@ -169,8 +169,24 @@ export class YouTubeMusicDetector {
       const albumElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.ALBUM_NAME);
       const album = albumElement?.textContent?.trim() || '';
 
+      // Debug: Log what we found
+      debug('Track extraction debug', {
+        titleElement: !!titleElement,
+        title: title,
+        artistElement: !!artistElement,
+        artist: artist,
+        albumElement: !!albumElement,
+        album: album,
+        selectors: {
+          titleSelector: YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE,
+          artistSelector: YOUTUBE_MUSIC_SELECTORS.ARTIST_NAME,
+          albumSelector: YOUTUBE_MUSIC_SELECTORS.ALBUM_NAME
+        }
+      });
+
       // Check if we have basic track info
       if (!title || !artist) {
+        debug('Insufficient track info - missing title or artist', { title, artist });
         return null;
       }
 
@@ -393,12 +409,61 @@ export class YouTubeMusicDetector {
         // Settings were updated, we might need to re-evaluate current track
         this.detectCurrentTrack();
         break;
+      case MESSAGE_TYPES.GET_CURRENT_TRACK:
+        // Send current track info back to popup
+        this.sendCurrentTrackInfo(sendResponse);
+        break;
       default:
         // Handle other message types if needed
         break;
     }
     
     sendResponse();
+  }
+
+  /**
+   * Send current track info to popup
+   */
+  private sendCurrentTrackInfo(sendResponse: (response?: any) => void): void {
+    try {
+      if (!this.isExtensionContextValid()) {
+        sendResponse({ success: false, error: 'Extension context invalidated' });
+        return;
+      }
+
+      const track = this.extractTrackInfo();
+      
+      if (track) {
+        const convertedTrack = convertYouTubeTrack(track);
+        debug('Sending current track info to popup', {
+          track: {
+            artist: convertedTrack.artist,
+            title: convertedTrack.title,
+            album: convertedTrack.album,
+            duration: convertedTrack.duration,
+            isPlaying: track.isPlaying
+          }
+        });
+        
+        sendResponse({
+          success: true,
+          track: convertedTrack,
+          isPlaying: track.isPlaying,
+          currentTime: track.currentTime,
+          thumbnail: track.thumbnail
+        });
+      } else {
+        debug('No current track to send to popup');
+        sendResponse({
+          success: true,
+          track: null,
+          isPlaying: false
+        });
+      }
+    } catch (error) {
+      log('error', 'Failed to send current track info:', error);
+      sendResponse({ success: false, error: 'Failed to get current track' });
+    }
   }
 
   /**
