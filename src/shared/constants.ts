@@ -28,8 +28,8 @@ export const YOUTUBE_MUSIC_SELECTORS = {
   PLAYER_BAR: 'ytmusic-player-bar',
   
   // Time information
-  CURRENT_TIME: 'ytmusic-player-bar .time-info .current-time',
-  DURATION: 'ytmusic-player-bar .time-info .duration',
+  CURRENT_TIME: 'ytmusic-player-bar .time-info .current-time, ytmusic-player-bar .time-info span:first-child',
+  DURATION: 'ytmusic-player-bar .time-info .duration, ytmusic-player-bar .time-info span:last-child',
   
   // Album art
   ALBUM_ART: 'ytmusic-player-bar img',

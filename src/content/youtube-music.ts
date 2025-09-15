@@ -231,6 +231,24 @@ export class YouTubeMusicDetector {
       const currentTimeText = currentTimeElement?.textContent?.trim() || '0:00';
       const currentTime = this.parseDuration(currentTimeText);
 
+      // Debug duration parsing
+      debug('Duration parsing debug', {
+        durationElement: !!durationElement,
+        durationText: durationText,
+        parsedDuration: duration,
+        currentTimeElement: !!currentTimeElement,
+        currentTimeText: currentTimeText,
+        parsedCurrentTime: currentTime,
+        durationSelector: YOUTUBE_MUSIC_SELECTORS.DURATION,
+        currentTimeSelector: YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME,
+        // Check for alternative time elements
+        alternativeTimeElements: {
+          timeInfo: document.querySelector('ytmusic-player-bar .time-info')?.textContent?.trim() || '',
+          allSpans: Array.from(document.querySelectorAll('ytmusic-player-bar .time-info span')).map(s => s.textContent?.trim()).filter(Boolean),
+          anyTimeText: document.querySelector('ytmusic-player-bar')?.textContent?.match(/\d+:\d+/g) || []
+        }
+      });
+
       // Check if playing
       const isPlaying = this.isCurrentlyPlaying();
 
