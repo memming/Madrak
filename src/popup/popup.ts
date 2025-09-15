@@ -349,63 +349,26 @@ class PopupController {
    */
   private async updateCurrentTrack(): Promise<void> {
     try {
-      // Get current tab from active tab
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs.length === 0) {
-        this.hideCurrentTrack();
-        return;
-      }
+      // Send message to background script to get current track
+      const response = await this.sendMessageToBackground({
+        type: MESSAGE_TYPES.GET_CURRENT_TRACK,
+      });
 
-      const tab = tabs[0];
-      if (!tab?.url?.includes('music.youtube.com')) {
-        this.showNotOnYouTubeMusic();
-        return;
-      }
-
-      // Check if content script is available
-      if (!tab?.id) {
-        this.hideCurrentTrack();
-        return;
-      }
-
-      try {
-        // Send message to content script to get current track
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          type: MESSAGE_TYPES.GET_CURRENT_TRACK
+      if (response?.success && response?.track) {
+        this.showCurrentTrack(response.track, {
+          isPlaying: response.isPlaying,
+          currentTime: response.currentTime,
+          thumbnail: response.thumbnail,
         });
-
-        if (response?.success && response?.track) {
-          this.showCurrentTrack(response.track, {
-            isPlaying: response.isPlaying,
-            currentTime: response.currentTime,
-            thumbnail: response.thumbnail
-          });
-        } else {
-          this.hideCurrentTrack();
-        }
-      } catch (messageError) {
-        // Handle specific message errors
-        if (messageError instanceof Error) {
-          if (messageError.message.includes('Could not establish connection') || 
-              messageError.message.includes('Receiving end does not exist')) {
-            log('warn', 'Content script not available on this tab', {
-              tabId: tab.id,
-              url: tab.url,
-              error: messageError.message
-            });
-            this.showContentScriptNotAvailable();
-          } else {
-            log('error', 'Failed to communicate with content script:', messageError);
-            this.hideCurrentTrack();
-          }
-        } else {
-          log('error', 'Unknown error communicating with content script:', messageError);
-          this.hideCurrentTrack();
-        }
+      } else {
+        // If there's no track, it could be because nothing is playing
+        // or the user isn't on YouTube Music.
+        this.showNotOnYouTubeMusic();
       }
     } catch (error) {
-      log('error', 'Failed to update current track:', error);
-      this.hideCurrentTrack();
+      log('error', 'Failed to update current track from background:', error);
+      // Display a generic error message in the track section
+      this.showContentScriptNotAvailable();
     }
   }
 
