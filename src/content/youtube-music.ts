@@ -71,6 +71,7 @@ export class YouTubeMusicDetector {
       });
       
       if (shouldCheck) {
+        debug('DOM mutation detected, checking for track changes');
         this.detectCurrentTrack();
       }
     });
@@ -80,6 +81,14 @@ export class YouTubeMusicDetector {
       subtree: true,
       characterData: true,
     });
+
+    debug('Started observing DOM changes');
+    
+    // Also run initial detection after a short delay to catch already playing tracks
+    setTimeout(() => {
+      debug('Running initial track detection after page load');
+      this.detectCurrentTrack();
+    }, 2000);
   }
 
   /**
@@ -181,6 +190,13 @@ export class YouTubeMusicDetector {
           titleSelector: YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE,
           artistSelector: YOUTUBE_MUSIC_SELECTORS.ARTIST_NAME,
           albumSelector: YOUTUBE_MUSIC_SELECTORS.ALBUM_NAME
+        },
+        // Also check for alternative selectors
+        alternativeSelectors: {
+          titleAlt1: document.querySelector('h1[class*="title"]')?.textContent?.trim() || '',
+          titleAlt2: document.querySelector('[class*="title"]')?.textContent?.trim() || '',
+          artistAlt1: document.querySelector('[class*="byline"]')?.textContent?.trim() || '',
+          artistAlt2: document.querySelector('[class*="subtitle"]')?.textContent?.trim() || '',
         }
       });
 
@@ -411,6 +427,8 @@ export class YouTubeMusicDetector {
         break;
       case MESSAGE_TYPES.GET_CURRENT_TRACK:
         // Send current track info back to popup
+        debug('GET_CURRENT_TRACK message received, triggering track detection');
+        this.detectCurrentTrack();
         this.sendCurrentTrackInfo(sendResponse);
         break;
       default:
