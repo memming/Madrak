@@ -514,12 +514,31 @@ export function showNotification(
   type: 'basic' | 'image' = 'basic',
   iconUrl?: string
 ): void {
-  chrome.notifications.create({
-    type,
-    iconUrl: iconUrl || 'assets/icon-48.png',
-    title,
-    message,
-  });
+  try {
+    // Always provide an iconUrl for basic notifications
+    const defaultIconUrl = chrome.runtime.getURL('assets/icon-48.png');
+    const finalIconUrl = iconUrl || defaultIconUrl;
+    
+    chrome.notifications.create({
+      type,
+      iconUrl: finalIconUrl,
+      title,
+      message,
+    });
+  } catch (error) {
+    console.error('[Madrak] Failed to create notification:', error);
+    // Fallback: try without iconUrl (this might fail but worth trying)
+    try {
+      chrome.notifications.create({
+        type: 'basic',
+        title,
+        message,
+        iconUrl: chrome.runtime.getURL('assets/icon-48.png'),
+      });
+    } catch (fallbackError) {
+      console.error('[Madrak] Failed to create fallback notification:', fallbackError);
+    }
+  }
 }
 
 /**

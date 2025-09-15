@@ -5,7 +5,7 @@
 import { Message, ExtensionSettings, LastFmUser } from '../shared/types';
 import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
 import { getSettings, saveSettings, log, getStoredLogs } from '../shared/utils';
-import { getDebugInfo, exportDebugLogs, clearDebugLogs } from '../shared/logger';
+import { getDebugInfo, exportDebugLogs, clearDebugLogs, initializeLogger } from '../shared/logger';
 
 class PopupController {
   private settings: ExtensionSettings | null = null;
@@ -21,6 +21,10 @@ class PopupController {
    */
   private async initialize(): Promise<void> {
     try {
+      // Initialize logger first
+      const settings = await getSettings();
+      initializeLogger(settings);
+      
       log('info', 'Initializing popup');
       
       // Load settings and user data
@@ -148,6 +152,7 @@ class PopupController {
     });
   }
 
+
   /**
    * Handle successful authentication
    */
@@ -255,7 +260,6 @@ class PopupController {
       if (this.isAuthenticated) {
         this.showMainSection();
         this.updateUserInfo();
-        this.updateStats();
         this.updateCurrentTrack();
       } else {
         this.showAuthSection();
@@ -339,44 +343,6 @@ class PopupController {
     return sizes[size as keyof typeof sizes] || 0;
   }
 
-  /**
-   * Update statistics
-   */
-  private async updateStats(): Promise<void> {
-    try {
-      // Get queue count from background script
-      const response = await this.sendMessageToBackground({
-        type: 'GET_QUEUE_STATS'
-      });
-
-      if (response?.stats) {
-        const queueCount = document.getElementById('queueCount');
-        if (queueCount) {
-          queueCount.textContent = response.stats.total.toString();
-        }
-      }
-
-      // Get last scrobble time
-      const lastScrobble = await this.getLastScrobbleTime();
-      const lastScrobbleElement = document.getElementById('lastScrobble');
-      if (lastScrobbleElement) {
-        if (lastScrobble) {
-          const timeAgo = this.getTimeAgo(lastScrobble);
-          lastScrobbleElement.textContent = timeAgo;
-        } else {
-          lastScrobbleElement.textContent = 'Never';
-        }
-      }
-
-      // Update scrobbled count (placeholder for now)
-      const scrobbledCount = document.getElementById('scrobbledCount');
-      if (scrobbledCount) {
-        scrobbledCount.textContent = '0'; // TODO: Get actual count
-      }
-    } catch (error) {
-      log('error', 'Failed to update stats:', error);
-    }
-  }
 
   /**
    * Update current track information
@@ -667,7 +633,7 @@ class PopupController {
       
       // Start authentication flow
       const response = await this.sendMessageToBackground({
-        type: 'START_AUTH'
+        type: MESSAGE_TYPES.START_AUTH
       });
 
       console.log('[Madrak] Received response from background:', response);
@@ -727,7 +693,7 @@ class PopupController {
   private async handleDisconnect(): Promise<void> {
     try {
       await this.sendMessageToBackground({
-        type: 'LOGOUT'
+        type: MESSAGE_TYPES.LOGOUT
       });
 
       // Reload data and update UI
@@ -995,7 +961,7 @@ class PopupController {
     try {
       // Send a ping message to wake up the service worker
       await new Promise<void>((resolve) => {
-        chrome.runtime.sendMessage({ type: 'PING' }, () => {
+        chrome.runtime.sendMessage({ type: MESSAGE_TYPES.PING }, () => {
           if (chrome.runtime.lastError) {
             // If ping fails, that's okay - we'll try the actual message anyway
             console.log('[Madrak] Service worker ping failed, proceeding anyway');
@@ -1029,7 +995,7 @@ class PopupController {
               console.log('[Madrak] Service worker may be sleeping, retrying in 200ms... (attempt ' + retryCount + '/' + maxRetries + ')');
               
               // Wake up service worker first
-              chrome.runtime.sendMessage({ type: 'PING' }, () => {
+              chrome.runtime.sendMessage({ type: MESSAGE_TYPES.PING }, () => {
                 // Wait a bit longer for service worker to wake up
                 setTimeout(() => {
                   attemptSend().then(resolve).catch(reject);
@@ -1064,36 +1030,6 @@ class PopupController {
     });
   }
 
-  /**
-   * Get last scrobble time
-   */
-  private async getLastScrobbleTime(): Promise<number | null> {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.get([STORAGE_KEYS.LAST_SCROBBLE], (result) => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve(result[STORAGE_KEYS.LAST_SCROBBLE] || null);
-        }
-      });
-    });
-  }
-
-  /**
-   * Get time ago string
-   */
-  private getTimeAgo(timestamp: number): string {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
-  }
 }
 
 // Initialize popup when DOM is loaded

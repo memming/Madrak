@@ -2,14 +2,17 @@
 
 A modern Chrome browser extension that automatically scrobbles music from YouTube Music to your Last.fm account. Named after the mystical character from Roger Zelazny's novel.
 
+**Version**: 0.3.1
+
 ## Features
 
 - 🎵 **Automatic Scrobbling**: Automatically detects and scrobbles music playing on YouTube Music
-- 🔐 **Secure Authentication**: OAuth-based authentication with Last.fm
+- 🔐 **Secure Authentication**: Complete OAuth-based authentication with Last.fm
 - ⚡ **Real-time Detection**: Monitors YouTube Music for track changes in real-time
 - 🎛️ **User Controls**: Pause/resume scrobbling, manual track correction
-- 📊 **Scrobble History**: View your recent scrobbles and statistics
+- 📊 **Live Statistics**: Real-time scrobble count and queue status updates
 - 🔧 **Customizable Settings**: Configure scrobbling preferences and thresholds
+- 🐛 **Debug Mode**: Comprehensive logging and debugging tools
 - 🚀 **Modern UI**: Clean, responsive interface built with modern web technologies
 
 ## Installation
@@ -20,8 +23,8 @@ A modern Chrome browser extension that automatically scrobbles music from YouTub
 ### Development Installation
 1. Clone this repository:
    ```bash
-   git clone https://github.com/memming/madrak.git
-   cd madrak
+   git clone https://github.com/memming/Madrak.git
+   cd Madrak
    ```
 
 2. Install dependencies:
@@ -42,13 +45,7 @@ A modern Chrome browser extension that automatically scrobbles music from YouTub
 ## Setup
 
 ### Last.fm API Setup
-1. Go to [Last.fm API](https://www.last.fm/api) and create a new application
-2. Note down your API key and shared secret
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Last.fm API credentials
-   ```
+The extension comes pre-configured with Last.fm API credentials. No additional setup required!
 
 ### YouTube Music
 The extension works automatically with YouTube Music. No additional setup required!
@@ -91,11 +88,9 @@ This extension uses **Rollup** instead of Webpack to comply with Chrome Manifest
 ```
 src/
 ├── background/          # Service worker scripts
-│   ├── service-worker.ts
-│   └── lastfm-api.ts
+│   └── service-worker.ts
 ├── content/            # Content scripts for YouTube Music
-│   ├── youtube-music.ts
-│   └── track-detector.ts
+│   └── youtube-music.ts
 ├── popup/              # Extension popup UI
 │   ├── popup.html
 │   ├── popup.ts
@@ -107,11 +102,13 @@ src/
 ├── shared/             # Shared utilities and types
 │   ├── types.ts
 │   ├── constants.ts
-│   └── utils.ts
-└── api/                # Last.fm API integration
-    ├── auth.ts
-    ├── scrobbler.ts
-    └── user.ts
+│   ├── utils.ts
+│   └── logger.ts
+├── api/                # Last.fm API integration
+│   ├── lastfm-api.ts
+│   ├── scrobbler.ts
+│   └── auth.ts
+└── utils/              # Additional utilities
 ```
 
 ### Available Scripts
@@ -176,21 +173,14 @@ The extension monitors YouTube Music's DOM for:
 
 ## Configuration
 
-### Environment Variables
-Create a `.env` file in the project root:
-
-```env
-LASTFM_API_KEY=your_api_key
-LASTFM_SHARED_SECRET=your_shared_secret
-LASTFM_API_URL=https://ws.audioscrobbler.com/2.0/
-```
-
 ### Extension Settings
 Users can configure:
-- Scrobbling thresholds (minimum track length)
-- Auto-pause scrobbling
-- Track correction preferences
-- Notification settings
+- **Debug Mode**: Enable detailed logging for troubleshooting
+- **Log Level**: Choose between INFO, DEBUG, WARN, ERROR levels
+- **Scrobbling Thresholds**: Minimum track length for scrobbling
+- **Auto-scrobbling**: Enable/disable automatic scrobbling
+- **Notifications**: Show/hide scrobbling notifications
+- **Track Correction**: Manual track information editing
 
 ## Troubleshooting
 
@@ -213,7 +203,10 @@ Users can configure:
 
 ### Debug Mode
 
-Enable debug mode in the extension options to see detailed logging information.
+Enable debug mode in the extension options to see detailed logging information. Debug logs will appear in:
+- **YouTube Music Console**: Right-click → Inspect → Console
+- **Extension Console**: Go to `chrome://extensions/` → Click "Inspect views: service worker"
+- **Popup Debug Panel**: Open the extension popup and click "Debug" to view system information
 
 ## Contributing
 
@@ -240,9 +233,9 @@ This extension:
 
 ## Support
 
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/yourusername/madrak/issues)
-- **Discussions**: Join community discussions on [GitHub Discussions](https://github.com/yourusername/madrak/discussions)
-- **Email**: Contact us at support@example.com
+- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/memming/Madrak/issues)
+- **Discussions**: Join community discussions on [GitHub Discussions](https://github.com/memming/Madrak/discussions)
+- **Repository**: [https://github.com/memming/Madrak](https://github.com/memming/Madrak)
 
 ## Changelog
 

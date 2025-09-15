@@ -132,6 +132,7 @@ export const MESSAGE_TYPES = {
   GET_DEBUG_INFO: 'GET_DEBUG_INFO',
   EXPORT_LOGS: 'EXPORT_LOGS',
   GET_CURRENT_TRACK: 'GET_CURRENT_TRACK',
+  PING: 'PING',
 } as const;
 
 // Last.fm API endpoints
