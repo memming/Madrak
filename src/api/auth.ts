@@ -72,7 +72,7 @@ export class AuthManager {
       
       // Get user info and save it
       log('info', 'Getting user info from Last.fm API');
-      const user = await this.api.getUserInfo();
+      const user = await this.api.getUserInfo(session.name);
       
       log('info', 'Last.fm API returned user info', { 
         hasUser: !!user,
@@ -212,7 +212,11 @@ export class AuthManager {
       }
 
       // Try to get user info to validate session
-      await this.api.getUserInfo();
+      const session = this.getSession();
+      if (!session) {
+        return false;
+      }
+      await this.api.getUserInfo(session.name);
       return true;
     } catch (error) {
       log('warn', 'Session validation failed:', error);
@@ -231,7 +235,11 @@ export class AuthManager {
         return null;
       }
 
-      const user = await this.api.getUserInfo();
+      const session = this.getSession();
+      if (!session) {
+        return null;
+      }
+      const user = await this.api.getUserInfo(session.name);
       await this.saveUser(user);
       return user;
     } catch (error) {
