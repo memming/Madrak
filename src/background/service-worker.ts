@@ -662,12 +662,15 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   backgroundService['handleTabUpdated'](tabId, changeInfo, tab);
   
-  // Check for Last.fm authentication callback - user has returned from Last.fm
+  // Check for Last.fm authentication callback - user has completed authorization
   if (changeInfo.status === 'complete' && tab.url && tabId === backgroundService['authTabId']) {
-    // Check if user is on Last.fm domain (they've completed authorization)
+    // Check if user is on Last.fm domain and has completed authorization
     if (tab.url.includes('last.fm') || tab.url.includes('lastfm.com')) {
-      console.log('[Madrak] Background: Detected user returned from Last.fm authorization');
-      backgroundService['handleAuthCallback'](tabId);
+      // Wait a bit to ensure the authorization process is complete
+      setTimeout(() => {
+        console.log('[Madrak] Background: Detected user on Last.fm after authorization');
+        backgroundService['handleAuthCallback'](tabId);
+      }, 2000); // Wait 2 seconds for authorization to complete
     }
   }
 });
