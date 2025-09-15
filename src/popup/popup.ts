@@ -409,15 +409,6 @@ class PopupController {
     this.updateScrobbleStatus(track, additionalInfo);
   }
 
-  /**
-   * Hide current track section
-   */
-  private hideCurrentTrack(): void {
-    const section = document.getElementById('currentTrackSection');
-    if (section) {
-      section.style.display = 'none';
-    }
-  }
 
   /**
    * Show not on YouTube Music message

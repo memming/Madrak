@@ -230,6 +230,140 @@ export class YouTubeMusicDetector {
   }
 
   /**
+   * Extract artist name with improved parsing
+   */
+  private extractArtistName(): string {
+    // Try multiple selectors for artist name
+    const selectors = [
+      'ytmusic-player-bar .byline .yt-simple-endpoint',
+      'ytmusic-player-bar .byline a',
+      'ytmusic-player-bar .byline .content-info-wrapper a',
+      'ytmusic-player-bar .byline'
+    ];
+    
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        let text = element.textContent?.trim() || '';
+        
+        // If we got the full byline, try to extract just the artist
+        if (text.includes('•') || text.includes('–') || text.includes('-')) {
+          // Split by common separators and take the first part (artist)
+          const parts = text.split(/[•–-]/);
+          if (parts.length > 0 && parts[0]) {
+            text = parts[0].trim();
+          }
+        }
+        
+        // Clean up any extra whitespace or special characters
+        text = text.replace(/\s+/g, ' ').trim();
+        
+        if (text && text.length > 0) {
+          debug('✅ ARTIST EXTRACTED', { 
+            selector, 
+            rawText: `"${element.textContent?.trim() || ''}"`,
+            parsedArtist: `"${text}"` 
+          });
+          return text;
+        }
+      }
+    }
+    
+    debug('❌ NO ARTIST FOUND', { 
+      triedSelectors: selectors,
+      bylineElement: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || 'NOT FOUND'
+    });
+    return '';
+  }
+
+  /**
+   * Extract album name with improved parsing
+   */
+  private extractAlbumName(): string {
+    // Try multiple selectors for album name
+    const selectors = [
+      'ytmusic-player-bar .subtitle',
+      'ytmusic-player-bar .byline .secondary-text',
+      'ytmusic-player-bar .byline'
+    ];
+    
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        let text = element.textContent?.trim() || '';
+        
+        // If we got the full byline, try to extract album info
+        if (text.includes('•') || text.includes('–') || text.includes('-')) {
+          // Split by common separators and take parts after the first (album/year)
+          const parts = text.split(/[•–-]/);
+          if (parts.length > 1) {
+            // Join all parts after the first one (artist)
+            text = parts.slice(1).join(' ').trim();
+          }
+        }
+        
+        // Clean up any extra whitespace or special characters
+        text = text.replace(/\s+/g, ' ').trim();
+        
+        if (text && text.length > 0) {
+          debug('✅ ALBUM EXTRACTED', { 
+            selector, 
+            rawText: `"${element.textContent?.trim() || ''}"`,
+            parsedAlbum: `"${text}"` 
+          });
+          return text;
+        }
+      }
+    }
+    
+    debug('❌ NO ALBUM FOUND', { 
+      triedSelectors: selectors,
+      subtitleElement: document.querySelector('ytmusic-player-bar .subtitle')?.textContent?.trim() || 'NOT FOUND',
+      bylineElement: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || 'NOT FOUND'
+    });
+    return '';
+  }
+
+  /**
+   * Extract year from album info
+   */
+  private extractYear(albumText: string): string {
+    if (!albumText) return '';
+    
+    // Look for 4-digit year patterns in the album text
+    const yearMatch = albumText.match(/\b(19|20)\d{2}\b/);
+    if (yearMatch) {
+      const year = yearMatch[0];
+      debug('✅ YEAR EXTRACTED', { 
+        fromAlbum: `"${albumText}"`,
+        extractedYear: `"${year}"` 
+      });
+      return year;
+    }
+    
+    // Also check the full byline for year info
+    const bylineElement = document.querySelector('ytmusic-player-bar .byline');
+    if (bylineElement) {
+      const bylineText = bylineElement.textContent?.trim() || '';
+      const bylineYearMatch = bylineText.match(/\b(19|20)\d{2}\b/);
+      if (bylineYearMatch) {
+        const year = bylineYearMatch[0];
+        debug('✅ YEAR EXTRACTED FROM BYLINE', { 
+          fromByline: `"${bylineText}"`,
+          extractedYear: `"${year}"` 
+        });
+        return year;
+      }
+    }
+    
+    debug('❌ NO YEAR FOUND', { 
+      albumText: `"${albumText}"`,
+      bylineText: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || 'NOT FOUND'
+    });
+    return '';
+  }
+
+  /**
    * Extract track information from the DOM
    */
   private extractTrackInfo(): YouTubeMusicTrack | null {
@@ -238,22 +372,34 @@ export class YouTubeMusicDetector {
       const titleElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE);
       const title = titleElement?.textContent?.trim() || '';
 
-      // Get artist name
-      const artistElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.ARTIST_NAME);
-      const artist = artistElement?.textContent?.trim() || '';
+      // Get artist name with improved parsing
+      let artist = this.extractArtistName();
+      
+      // Get album name with improved parsing
+      let album = this.extractAlbumName();
 
-      // Get album name
-      const albumElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.ALBUM_NAME);
-      const album = albumElement?.textContent?.trim() || '';
-
-      // Reduced debug logging for performance - only log when no track info found
-      if (!title || !artist) {
-        debug('Track extraction - missing title or artist', { title, artist });
+      // Extract year from album info if available
+      const year = this.extractYear(album);
+      
+      // Clean album name by removing the year if it was found
+      if (year) {
+        album = album.replace(/\b(19|20)\d{2}\b/g, '').replace(/\s+/g, ' ').trim();
       }
+      
+      // Log parsed track information with clear delimiters
+      debug(`[ARTIST][TITLE][ALBUM][YEAR]`, {
+        '[ARTIST]': `"${artist}"`,
+        '[TITLE]': `"${title}"`,
+        '[ALBUM]': `"${album}"`,
+        '[YEAR]': `"${year}"`
+      });
 
       // Check if we have basic track info
       if (!title || !artist) {
-        debug('Insufficient track info - missing title or artist', { title, artist });
+        debug('❌ INSUFFICIENT TRACK INFO - Missing title or artist', { 
+          title: `"${title}"`, 
+          artist: `"${artist}"` 
+        });
         return null;
       }
 

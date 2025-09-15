@@ -19,8 +19,8 @@ export const STORAGE_KEYS = {
 export const YOUTUBE_MUSIC_SELECTORS = {
   // Track information - updated for actual YouTube Music DOM
   TRACK_TITLE: 'ytmusic-player-bar .title',
-  ARTIST_NAME: 'ytmusic-player-bar .byline',
-  ALBUM_NAME: 'ytmusic-player-bar .subtitle',
+  ARTIST_NAME: 'ytmusic-player-bar .byline .yt-simple-endpoint, ytmusic-player-bar .byline a, ytmusic-player-bar .byline .content-info-wrapper a',
+  ALBUM_NAME: 'ytmusic-player-bar .subtitle, ytmusic-player-bar .byline .secondary-text',
   
   // Player controls
   PLAY_BUTTON: 'ytmusic-play-button-renderer[state="paused"]',
