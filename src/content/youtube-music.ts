@@ -5,7 +5,7 @@
 console.log('[Madrak] Content script loaded on:', window.location.href);
 
 import { YouTubeMusicTrack, Message } from '../shared/types';
-import { YOUTUBE_MUSIC_SELECTORS, MESSAGE_TYPES } from '../shared/constants';
+import { YOUTUBE_MUSIC_SELECTORS, MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
 import { convertYouTubeTrack, log, debug, info, debounce, getSettings } from '../shared/utils';
 import { initializeLogger } from '../shared/logger';
 
@@ -67,6 +67,24 @@ export class YouTubeMusicDetector {
     } catch (error) {
       log('error', 'Failed to set up message listener:', error);
       return;
+    }
+
+    // Listen for storage changes
+    try {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'sync' && changes[STORAGE_KEYS.SETTINGS]) {
+          const newSettings = changes[STORAGE_KEYS.SETTINGS].newValue;
+          if (newSettings) {
+            initializeLogger(newSettings);
+            debug('Logger re-initialized after settings change from storage.', {
+              debugMode: newSettings.debugMode,
+              logLevel: newSettings.logLevel,
+            });
+          }
+        }
+      });
+    } catch (error) {
+      log('error', 'Failed to set up storage change listener:', error);
     }
 
     info('YouTube Music detector initialized successfully');
@@ -802,14 +820,7 @@ export class YouTubeMusicDetector {
 
     switch (message.type) {
       case MESSAGE_TYPES.SETTINGS_UPDATE:
-        // Settings were updated, re-initialize logger
-        if (message.data && message.data.settings) {
-          initializeLogger(message.data.settings);
-          debug('Logger re-initialized with new settings', {
-            debugMode: message.data.settings.debugMode,
-            logLevel: message.data.settings.logLevel,
-          });
-        }
+        // Settings were updated, we might need to re-evaluate current track
         this.detectCurrentTrack();
         break;
       default:
