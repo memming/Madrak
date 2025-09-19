@@ -73,8 +73,9 @@ export class YouTubeMusicDetector {
     try {
       chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName === 'sync' && changes[STORAGE_KEYS.SETTINGS]) {
-          const newSettings = changes[STORAGE_KEYS.SETTINGS].newValue;
-          if (newSettings) {
+          const settingsChange = changes[STORAGE_KEYS.SETTINGS];
+          if (settingsChange && settingsChange.newValue) {
+            const newSettings = settingsChange.newValue;
             initializeLogger(newSettings);
             debug('Logger re-initialized after settings change from storage.', {
               debugMode: newSettings.debugMode,
