@@ -25,15 +25,15 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false, // Keep console logs for debugging
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
+  //     terser({
+  //       compress: {
+  //         drop_console: false, // Keep console logs for debugging
+  //         drop_debugger: true
+  //       },
+  //       mangle: {
+  //         reserved: ['chrome', 'browser']
+  //       }
+  //     })
     ]
   },
   // Content script
@@ -55,15 +55,6 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false,
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
     ]
   },
   // Popup script
@@ -85,15 +76,6 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false,
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
     ]
   },
   // Options script
@@ -115,15 +97,6 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false,
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
     ]
   },
 ];
