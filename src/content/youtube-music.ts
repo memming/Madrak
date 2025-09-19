@@ -11,7 +11,6 @@ import { initializeLogger } from '../shared/logger';
 
 export class YouTubeMusicDetector {
   private currentTrack: YouTubeMusicTrack | null = null;
-  private lastScrobbledTrack: Track | null = null;
   private observer: MutationObserver | null = null;
   private updateNowPlayingDebounced: (() => void) | null = null;
   private detectTrackDebounced: (() => void) | null = null;
@@ -545,15 +544,11 @@ export class YouTubeMusicDetector {
     let endedTrackData = null;
     if (this.currentTrack) {
       const convertedOldTrack = convertYouTubeTrack(this.currentTrack);
-      // Check if we should scrobble
-      if (!this.lastScrobbledTrack || !isSameTrack(convertedOldTrack, this.lastScrobbledTrack)) {
-        endedTrackData = {
-          track: convertedOldTrack,
-          youtubeTrack: this.currentTrack,
-          playDuration: this.currentTrack.currentTime,
-        };
-        this.lastScrobbledTrack = convertedOldTrack;
-      }
+      endedTrackData = {
+        track: convertedOldTrack,
+        youtubeTrack: this.currentTrack,
+        playDuration: this.currentTrack.currentTime,
+      };
     }
 
     this.sendMessage({
@@ -604,25 +599,6 @@ export class YouTubeMusicDetector {
 
     const convertedTrack = convertYouTubeTrack(this.currentTrack);
     
-    debug('checkForScrobble: Checking if track should be scrobbled', {
-      track: {
-        artist: convertedTrack.artist,
-        title: convertedTrack.title,
-        duration: convertedTrack.duration,
-        currentTime: this.currentTrack.currentTime
-      },
-      lastScrobbledTrack: this.lastScrobbledTrack ? {
-        artist: this.lastScrobbledTrack.artist,
-        title: this.lastScrobbledTrack.title
-      } : null
-    });
-    
-    // Check if this is the same track we last scrobbled
-    if (this.lastScrobbledTrack && isSameTrack(convertedTrack, this.lastScrobbledTrack)) {
-      debug('checkForScrobble: Track already scrobbled, skipping');
-      return;
-    }
-
     debug('checkForScrobble: Sending TRACK_ENDED message for scrobbling', {
       track: {
         artist: convertedTrack.artist,
@@ -641,8 +617,6 @@ export class YouTubeMusicDetector {
         playDuration: this.currentTrack.currentTime,
       },
     });
-
-    this.lastScrobbledTrack = convertedTrack;
   }
 
   /**
