@@ -802,7 +802,14 @@ export class YouTubeMusicDetector {
 
     switch (message.type) {
       case MESSAGE_TYPES.SETTINGS_UPDATE:
-        // Settings were updated, we might need to re-evaluate current track
+        // Settings were updated, re-initialize logger
+        if (message.data && message.data.settings) {
+          initializeLogger(message.data.settings);
+          debug('Logger re-initialized with new settings', {
+            debugMode: message.data.settings.debugMode,
+            logLevel: message.data.settings.logLevel,
+          });
+        }
         this.detectCurrentTrack();
         break;
       default:
