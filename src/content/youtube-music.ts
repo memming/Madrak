@@ -508,12 +508,27 @@ export class YouTubeMusicDetector {
    */
   private hasTrackChanged(newTrack: YouTubeMusicTrack): boolean {
     if (!this.currentTrack) return true;
-    
-    return (
+
+    const isDifferentTrack =
       this.currentTrack.title !== newTrack.title ||
       this.currentTrack.artist !== newTrack.artist ||
-      this.currentTrack.album !== newTrack.album
-    );
+      this.currentTrack.album !== newTrack.album;
+
+    if (isDifferentTrack) {
+      return true;
+    }
+
+    // If the same track is being played again, it's a change.
+    // This is detected by a significant jump backwards in time (e.g. replay or seek).
+    if (newTrack.isPlaying && this.currentTrack.currentTime > newTrack.currentTime + 5) {
+      debug('Track replayed or seeked backwards', {
+        previousTime: this.currentTrack.currentTime,
+        newTime: newTrack.currentTime,
+      });
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -521,29 +536,31 @@ export class YouTubeMusicDetector {
    */
   private handleTrackChanged(track: YouTubeMusicTrack): void {
     log('info', `Track changed: ${track.artist} - ${track.title}`);
-    
-    // If we had a previous track, scrobble it before handling the new track
+
+    const newTrackData = {
+      track: convertYouTubeTrack(track),
+      youtubeTrack: track,
+    };
+
+    let endedTrackData = null;
     if (this.currentTrack) {
-      debug('Track changed - scrobbling previous track', {
-        previousTrack: {
-          artist: this.currentTrack.artist,
-          title: this.currentTrack.title,
-          duration: this.currentTrack.duration,
-          currentTime: this.currentTrack.currentTime
-        }
-      });
-      this.checkForScrobble();
+      const convertedOldTrack = convertYouTubeTrack(this.currentTrack);
+      // Check if we should scrobble
+      if (!this.lastScrobbledTrack || !isSameTrack(convertedOldTrack, this.lastScrobbledTrack)) {
+        endedTrackData = {
+          track: convertedOldTrack,
+          youtubeTrack: this.currentTrack,
+          playDuration: this.currentTrack.currentTime,
+        };
+        this.lastScrobbledTrack = convertedOldTrack;
+      }
     }
-    
-    // Convert to our Track format
-    const convertedTrack = convertYouTubeTrack(track);
-    
-    // Send track detected message
+
     this.sendMessage({
-      type: MESSAGE_TYPES.TRACK_DETECTED,
+      type: 'TRACK_CHANGED',
       data: {
-        track: convertedTrack,
-        youtubeTrack: track,
+        newTrack: newTrackData,
+        endedTrack: endedTrackData,
       },
     });
 
