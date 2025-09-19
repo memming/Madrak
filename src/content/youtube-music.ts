@@ -4,9 +4,9 @@
 
 console.log('[Madrak] Content script loaded on:', window.location.href);
 
-import { YouTubeMusicTrack, Track, Message } from '../shared/types';
+import { YouTubeMusicTrack, Message } from '../shared/types';
 import { YOUTUBE_MUSIC_SELECTORS, MESSAGE_TYPES } from '../shared/constants';
-import { convertYouTubeTrack, isSameTrack, log, debug, info, debounce, getSettings } from '../shared/utils';
+import { convertYouTubeTrack, log, debug, info, debounce, getSettings } from '../shared/utils';
 import { initializeLogger } from '../shared/logger';
 
 export class YouTubeMusicDetector {
