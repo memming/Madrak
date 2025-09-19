@@ -2,7 +2,7 @@
 
 A modern Chrome browser extension that automatically scrobbles music from YouTube Music to your Last.fm account. Named after the mystical character from Roger Zelazny's novel.
 
-**Version**: 0.3.2
+**Version**: 0.4.0
 
 ## Features
 
@@ -135,6 +135,16 @@ src/
    - Go to `chrome://extensions/`
    - Enable Developer mode
    - Click "Load unpacked" and select the `dist` folder
+
+### Version Management
+
+This project uses a centralized version management system to ensure consistency across all files:
+
+- **Check version consistency**: `npm run version:check`
+- **Update version numbers**: `npm run version:update 0.3.3`
+- **Source of truth**: `package.json` version field
+
+See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) for detailed information.
 
 3. **Test on YouTube Music**:
    - Navigate to YouTube Music

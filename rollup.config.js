@@ -4,6 +4,12 @@ import commonjs from '@rollup/plugin-commonjs';
 import copy from 'rollup-plugin-copy';
 import terser from '@rollup/plugin-terser';
 import json from '@rollup/plugin-json';
+import replace from '@rollup/plugin-replace';
+import fs from 'fs';
+
+// Read version from package.json
+const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const version = packageJson.version;
 
 export default [
   // Background service worker
@@ -66,6 +72,10 @@ export default [
       name: 'PopupController'
     },
     plugins: [
+      replace({
+        'EXTENSION_VERSION_PLACEHOLDER': version,
+        preventAssignment: true
+      }),
       typescript({
         tsconfig: './tsconfig.json',
         declaration: false,
@@ -87,6 +97,10 @@ export default [
       name: 'OptionsController'
     },
     plugins: [
+      replace({
+        'EXTENSION_VERSION_PLACEHOLDER': version,
+        preventAssignment: true
+      }),
       typescript({
         tsconfig: './tsconfig.json',
         declaration: false,
