@@ -4,6 +4,12 @@ import commonjs from '@rollup/plugin-commonjs';
 import copy from 'rollup-plugin-copy';
 import terser from '@rollup/plugin-terser';
 import json from '@rollup/plugin-json';
+import replace from '@rollup/plugin-replace';
+import fs from 'fs';
+
+// Read version from package.json
+const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const version = packageJson.version;
 
 export default [
   // Background service worker
@@ -25,15 +31,15 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false, // Keep console logs for debugging
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
+  //     terser({
+  //       compress: {
+  //         drop_console: false, // Keep console logs for debugging
+  //         drop_debugger: true
+  //       },
+  //       mangle: {
+  //         reserved: ['chrome', 'browser']
+  //       }
+  //     })
     ]
   },
   // Content script
@@ -55,15 +61,6 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false,
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
     ]
   },
   // Popup script
@@ -75,6 +72,10 @@ export default [
       name: 'PopupController'
     },
     plugins: [
+      replace({
+        'EXTENSION_VERSION_PLACEHOLDER': version,
+        preventAssignment: true
+      }),
       typescript({
         tsconfig: './tsconfig.json',
         declaration: false,
@@ -85,15 +86,6 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false,
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
     ]
   },
   // Options script
@@ -105,6 +97,10 @@ export default [
       name: 'OptionsController'
     },
     plugins: [
+      replace({
+        'EXTENSION_VERSION_PLACEHOLDER': version,
+        preventAssignment: true
+      }),
       typescript({
         tsconfig: './tsconfig.json',
         declaration: false,
@@ -115,15 +111,6 @@ export default [
         preferBuiltins: false
       }),
       commonjs(),
-      terser({
-        compress: {
-          drop_console: false,
-          drop_debugger: true
-        },
-        mangle: {
-          reserved: ['chrome', 'browser']
-        }
-      })
     ]
   },
 ];
