@@ -95,7 +95,20 @@ class BackgroundService {
    * Handle messages from content scripts and popup
    */
   private handleMessage(message: Message, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean {
-    log('info', 'Received message:', message.type);
+    if (message.type === MESSAGE_TYPES.GET_CURRENT_TRACK) {
+      log('info', `Received message: ${message.type}`, {
+        currentTrack: this.currentTrack
+          ? {
+              artist: this.currentTrack.artist,
+              title: this.currentTrack.title,
+              album: this.currentTrack.album,
+            }
+          : null,
+        isPlaying: this.youtubeTrack?.isPlaying,
+      });
+    } else {
+      log('info', 'Received message:', message.type);
+    }
 
     switch (message.type) {
       case 'PING':
@@ -107,6 +120,9 @@ class BackgroundService {
         break;
       case MESSAGE_TYPES.TRACK_ENDED:
         this.handleTrackEnded(message.data);
+        break;
+      case 'TRACK_CHANGED':
+        this.handleTrackChanged(message.data, sender);
         break;
       case MESSAGE_TYPES.AUTH_SUCCESS:
         this.handleAuthSuccess(message.data);
@@ -151,6 +167,18 @@ class BackgroundService {
     // Send response for synchronous messages
     sendResponse({ success: true });
     return false; // Response sent synchronously
+  }
+
+  /**
+   * Handle track changed message
+   */
+  private async handleTrackChanged(data: any, sender: chrome.runtime.MessageSender): Promise<void> {
+    if (data.endedTrack) {
+      await this.handleTrackEnded(data.endedTrack);
+    }
+    if (data.newTrack) {
+      await this.handleTrackDetected(data.newTrack, sender);
+    }
   }
 
   /**
