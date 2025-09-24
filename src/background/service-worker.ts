@@ -19,17 +19,17 @@ class BackgroundService {
   private currentTrack: Track | null = null;
   private youtubeTrack: YouTubeMusicTrack | null = null;
   private activeTabId: number | null = null;
-  // Removed unused isInitialized property
+  private initializationPromise: Promise<void>;
 
   constructor() {
     // Initialize with placeholder values - will be updated from settings
     // TODO: Replace with your actual Last.fm API credentials
     // Get them from: https://www.last.fm/api/account/create
     this.authManager = new AuthManager(
-      'a3720627f403249db395d43df61594df', 
+      'a3720627f403249db395d43df61594df',
       'b683267386a4cf8747d6a557da8b305c'
     );
-    this.initialize();
+    this.initializationPromise = this.initialize();
   }
 
   /**
@@ -95,78 +95,81 @@ class BackgroundService {
    * Handle messages from content scripts and popup
    */
   private handleMessage(message: Message, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean {
-    if (message.type === MESSAGE_TYPES.GET_CURRENT_TRACK) {
-      log('info', `Received message: ${message.type}`, {
-        currentTrack: this.currentTrack
-          ? {
-              artist: this.currentTrack.artist,
-              title: this.currentTrack.title,
-              album: this.currentTrack.album,
-            }
-          : null,
-        isPlaying: this.youtubeTrack?.isPlaying,
-      });
-    } else {
-      log('info', 'Received message:', message.type);
-    }
+    this.initializationPromise.then(() => {
+      if (message.type === MESSAGE_TYPES.GET_CURRENT_TRACK) {
+        log('info', `Received message: ${message.type}`, {
+          currentTrack: this.currentTrack
+            ? {
+                artist: this.currentTrack.artist,
+                title: this.currentTrack.title,
+                album: this.currentTrack.album,
+              }
+            : null,
+          isPlaying: this.youtubeTrack?.isPlaying,
+        });
+      } else {
+        log('info', 'Received message:', message.type);
+      }
 
-    switch (message.type) {
-      case 'PING':
-        // Respond to ping to keep service worker active
-        sendResponse({ success: true, pong: true });
-        return false; // Response sent synchronously
-      case MESSAGE_TYPES.TRACK_DETECTED:
-        this.handleTrackDetected(message.data, sender);
-        break;
-      case MESSAGE_TYPES.TRACK_ENDED:
-        this.handleTrackEnded(message.data);
-        break;
-      case 'TRACK_CHANGED':
-        this.handleTrackChanged(message.data, sender);
-        break;
-      case MESSAGE_TYPES.AUTH_SUCCESS:
-        this.handleAuthSuccess(message.data);
-        break;
-      case MESSAGE_TYPES.AUTH_ERROR:
-        this.handleAuthError(message.data);
-        break;
-      case MESSAGE_TYPES.SETTINGS_UPDATE:
-        this.handleSettingsUpdate(message.data);
-        break;
-      case MESSAGE_TYPES.START_AUTH:
-        this.handleStartAuth(sendResponse);
-        return true; // Response will be sent asynchronously
-      case MESSAGE_TYPES.COMPLETE_AUTH:
-        this.handleCompleteAuth(message.data, sendResponse);
-        return true; // Response will be sent asynchronously
-      case MESSAGE_TYPES.LOGOUT:
-        this.handleLogout();
-        break;
-      case MESSAGE_TYPES.GET_QUEUE_STATS:
-        this.handleGetQueueStats(sendResponse);
-        return true; // Response will be sent asynchronously
-      case MESSAGE_TYPES.GET_DEBUG_INFO:
-        this.handleGetDebugInfo(sendResponse);
-        return true; // Response will be sent asynchronously
-      case MESSAGE_TYPES.GET_CURRENT_TRACK:
-        this.handleGetCurrentTrack(sendResponse);
-        return true; // Response will be sent asynchronously
-      case MESSAGE_TYPES.EXPORT_LOGS:
-        this.handleExportLogs(sendResponse);
-        return true; // Response will be sent asynchronously
-      case MESSAGE_TYPES.CLEAR_ALL_DATA:
-        this.handleClearAllData();
-        break;
-      case MESSAGE_TYPES.REFRESH_USER_DATA:
-        this.handleRefreshUserData(sendResponse);
-        return true; // Response will be sent asynchronously
-      default:
-        log('warn', 'Unknown message type:', message.type);
-    }
+      switch (message.type) {
+        case 'PING':
+          // Respond to ping to keep service worker active
+          sendResponse({ success: true, pong: true });
+          return;
+        case MESSAGE_TYPES.TRACK_DETECTED:
+          this.handleTrackDetected(message.data, sender);
+          break;
+        case MESSAGE_TYPES.TRACK_ENDED:
+          this.handleTrackEnded(message.data);
+          break;
+        case 'TRACK_CHANGED':
+          this.handleTrackChanged(message.data, sender);
+          break;
+        case MESSAGE_TYPES.AUTH_SUCCESS:
+          this.handleAuthSuccess(message.data);
+          break;
+        case MESSAGE_TYPES.AUTH_ERROR:
+          this.handleAuthError(message.data);
+          break;
+        case MESSAGE_TYPES.SETTINGS_UPDATE:
+          this.handleSettingsUpdate(message.data);
+          break;
+        case MESSAGE_TYPES.START_AUTH:
+          this.handleStartAuth(sendResponse);
+          return;
+        case MESSAGE_TYPES.COMPLETE_AUTH:
+          this.handleCompleteAuth(message.data, sendResponse);
+          return;
+        case MESSAGE_TYPES.LOGOUT:
+          this.handleLogout();
+          break;
+        case MESSAGE_TYPES.GET_QUEUE_STATS:
+          this.handleGetQueueStats(sendResponse);
+          return;
+        case MESSAGE_TYPES.GET_DEBUG_INFO:
+          this.handleGetDebugInfo(sendResponse);
+          return;
+        case MESSAGE_TYPES.GET_CURRENT_TRACK:
+          this.handleGetCurrentTrack(sendResponse);
+          return;
+        case MESSAGE_TYPES.EXPORT_LOGS:
+          this.handleExportLogs(sendResponse);
+          return;
+        case MESSAGE_TYPES.CLEAR_ALL_DATA:
+          this.handleClearAllData();
+          break;
+        case MESSAGE_TYPES.REFRESH_USER_DATA:
+          this.handleRefreshUserData(sendResponse);
+          return;
+        default:
+          log('warn', 'Unknown message type:', message.type);
+      }
 
-    // Send response for synchronous messages
-    sendResponse({ success: true });
-    return false; // Response sent synchronously
+      // Send response for synchronous messages
+      sendResponse({ success: true });
+    });
+
+    return true;
   }
 
   /**
@@ -324,51 +327,59 @@ class BackgroundService {
    * Handle extension installation
    */
   private handleInstalled(details: chrome.runtime.InstalledDetails): void {
-    log('info', 'Extension installed/updated:', details.reason);
-    
-    if (details.reason === 'install') {
-      // Open options page on first install
-      chrome.runtime.openOptionsPage();
-    }
+    this.initializationPromise.then(() => {
+      log('info', 'Extension installed/updated:', details.reason);
+
+      if (details.reason === 'install') {
+        // Open options page on first install
+        chrome.runtime.openOptionsPage();
+      }
+    });
   }
 
   /**
    * Handle tab updates
    */
   private handleTabUpdated(tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab): void {
-    if (tabId === this.activeTabId && changeInfo.status === 'loading') {
-      if (!tab.url?.includes('music.youtube.com')) {
-        log('info', 'YouTube Music tab navigated away, clearing current track');
-        this.currentTrack = null;
-        this.youtubeTrack = null;
-        this.activeTabId = null;
+    this.initializationPromise.then(() => {
+      if (tabId === this.activeTabId && changeInfo.status === 'loading') {
+        if (!tab.url?.includes('music.youtube.com')) {
+          log('info', 'YouTube Music tab navigated away, clearing current track');
+          this.currentTrack = null;
+          this.youtubeTrack = null;
+          this.activeTabId = null;
+        }
       }
-    }
-    if (changeInfo.status === 'complete' && tab.url?.includes('music.youtube.com')) {
-      log('info', 'YouTube Music tab loaded');
-    }
+      if (changeInfo.status === 'complete' && tab.url?.includes('music.youtube.com')) {
+        log('info', 'YouTube Music tab loaded');
+      }
+    });
   }
 
   /**
    * Handle tab removal
    */
   private handleTabRemoved(tabId: number): void {
-    if (tabId === this.activeTabId) {
-      log('info', 'YouTube Music tab closed, clearing current track');
-      this.currentTrack = null;
-      this.youtubeTrack = null;
-      this.activeTabId = null;
-    }
+    this.initializationPromise.then(() => {
+      if (tabId === this.activeTabId) {
+        log('info', 'YouTube Music tab closed, clearing current track');
+        this.currentTrack = null;
+        this.youtubeTrack = null;
+        this.activeTabId = null;
+      }
+    });
   }
 
   /**
    * Handle tab activation
    */
   private handleTabActivated(activeInfo: chrome.tabs.TabActiveInfo): void {
-    chrome.tabs.get(activeInfo.tabId, (tab) => {
-      if (tab.url?.includes('music.youtube.com')) {
-        log('info', 'YouTube Music tab activated');
-      }
+    this.initializationPromise.then(() => {
+      chrome.tabs.get(activeInfo.tabId, (tab) => {
+        if (tab.url?.includes('music.youtube.com')) {
+          log('info', 'YouTube Music tab activated');
+        }
+      });
     });
   }
 
@@ -376,10 +387,12 @@ class BackgroundService {
    * Handle storage changes
    */
   private handleStorageChanged(_changes: { [key: string]: chrome.storage.StorageChange }, areaName: string): void {
-    if (areaName === 'sync') {
-      // Settings changed, reload them
-      this.initialize();
-    }
+    this.initializationPromise.then(() => {
+      if (areaName === 'sync') {
+        // Settings changed, reload them
+        this.initialize();
+      }
+    });
   }
 
 
