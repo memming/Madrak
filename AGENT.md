@@ -40,6 +40,7 @@ This project develops Madrak, a Chrome browser extension that interfaces with th
 
 ### 6. Development Workflow
 - **Version Control**: Use semantic versioning and clear commit messages
+- **Version Management**: Use centralized version management tools for consistency
 - **Testing**: Write unit tests for core functionality
 - **Documentation**: Keep code well-documented with JSDoc comments
 - **Code Review**: All changes should be reviewed before merging
@@ -87,7 +88,8 @@ src/
 
 ### 13. Deployment
 - **Chrome Web Store**: Prepare for Chrome Web Store submission
-- **Version Management**: Use proper versioning and changelog
+- **Version Management**: Use centralized version management scripts for consistency
+- **Release Process**: Use `npm run release` for one-command build and packaging
 - **Rollback Plan**: Have a plan for quick rollbacks if issues arise
 
 ### 14. Monitoring & Analytics
@@ -102,11 +104,47 @@ src/
 - **Open Source**: Consider open-sourcing non-sensitive parts
 
 ## Development Commands
+
+### Build & Package
 - `npm run build` - Build Madrak for production
 - `npm run dev` - Start development mode with hot reload
+- `npm run release` - Build and package extension (one command for Chrome Web Store)
+- `npm run package` - Build and package extension (creates new ZIP)
+
+### Version Management
+- `npm run version:check` - Check version consistency across all files
+- `npm run version:update X.Y.Z` - Update version numbers across all files
+
+### Quality Assurance
 - `npm test` - Run test suite
 - `npm run lint` - Run ESLint
 - `npm run type-check` - Run TypeScript type checking
+- `npm run clean` - Clean build artifacts
+
+## Version Management Workflow
+
+### IMPORTANT: Always use centralized version management tools!
+
+**Before making any version changes:**
+1. Check current version consistency: `npm run version:check`
+2. If inconsistent, fix with: `npm run version:update <current-version>`
+
+**For version bumps:**
+1. Use the centralized tool: `npm run version:update X.Y.Z`
+2. Review changes: `git diff`
+3. Commit changes: `git add . && git commit -m "Bump version to X.Y.Z"`
+4. Create tag: `git tag vX.Y.Z`
+5. Build and package: `npm run release`
+
+**Files managed by version tool:**
+- `package.json` - NPM package version
+- `src/manifest.json` - Chrome extension version
+- `src/shared/constants.ts` - EXTENSION_VERSION constant
+- `README.md` - Documentation version
+- `src/popup/popup.html` - UI version display
+- `src/options/options.html` - Options page version display
+
+**Never manually edit version numbers!** Always use `npm run version:update` to ensure consistency.
 
 ## Getting Started
 1. Clone the Madrak repository
