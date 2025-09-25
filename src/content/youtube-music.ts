@@ -15,6 +15,7 @@ export class YouTubeMusicDetector {
   private updateNowPlayingDebounced: (() => void) | null = null;
   private detectTrackDebounced: (() => void) | null = null;
   private lastDetectionTime: number = 0;
+  private scrobbleSubmitted: boolean = false; // Add this line
   private readonly DETECTION_THROTTLE_MS = 1000; // Minimum 1 second between detections
 
   constructor() {
@@ -533,11 +534,13 @@ export class YouTubeMusicDetector {
       this.currentTrack.album !== newTrack.album;
 
     if (isDifferentTrack) {
+      debug('Track changed based on metadata (artist, title, or album)');
       return true;
     }
 
     // If the same track is being played again, it's a change.
     // This is detected by a significant jump backwards in time (e.g. replay or seek).
+    // A threshold of 5 seconds is used to avoid minor fluctuations.
     if (newTrack.isPlaying && this.currentTrack.currentTime > newTrack.currentTime + 5) {
       debug('Track replayed or seeked backwards', {
         previousTime: this.currentTrack.currentTime,
@@ -554,6 +557,7 @@ export class YouTubeMusicDetector {
    */
   private handleTrackChanged(track: YouTubeMusicTrack): void {
     log('info', `Track changed: ${track.artist} - ${track.title}`);
+    this.scrobbleSubmitted = false; // Reset the flag for the new track
 
     const newTrackData = {
       track: convertYouTubeTrack(track),
@@ -616,6 +620,12 @@ export class YouTubeMusicDetector {
       return;
     }
 
+    if (this.scrobbleSubmitted) {
+      debug('checkForScrobble: Scrobble already submitted for this track');
+      return;
+    }
+
+    this.scrobbleSubmitted = true;
     const convertedTrack = convertYouTubeTrack(this.currentTrack);
     
     debug('checkForScrobble: Sending TRACK_ENDED message for scrobbling', {
