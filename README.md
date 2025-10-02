@@ -18,7 +18,7 @@ A modern Chrome browser extension that automatically scrobbles music from YouTub
 ## Installation
 
 ### From Chrome Web Store
-*Coming soon - extension will be available on the Chrome Web Store*
+*[Chrome Web Store link](https://chromewebstore.google.com/detail/madrak/kgfpapajfgndfmninkgfmfgpankheoao)*
 
 ### Development Installation
 1. Clone this repository:
