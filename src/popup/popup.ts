@@ -3,7 +3,7 @@
  */
 
 import { Message, ExtensionSettings, LastFmUser } from '../shared/types';
-import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
+import { MESSAGE_TYPES, STORAGE_KEYS, EXTENSION_NAME, EXTENSION_VERSION } from '../shared/constants';
 import { getSettings, log, getStoredLogs } from '../shared/utils';
 import { getDebugInfo, exportDebugLogs, clearDebugLogs, initializeLogger } from '../shared/logger';
 
@@ -25,7 +25,11 @@ class PopupController {
       const settings = await getSettings();
       initializeLogger(settings);
       
-      log('info', 'Initializing popup');
+      log('info', `🎛️ ${EXTENSION_NAME} v${EXTENSION_VERSION} - Initializing popup`, {
+        version: EXTENSION_VERSION,
+        name: EXTENSION_NAME,
+        timestamp: new Date().toISOString()
+      });
       
       // Load settings and user data
       await this.loadData();
@@ -49,7 +53,10 @@ class PopupController {
         }, 100);
       }
       
-      log('info', 'Popup initialized successfully');
+      log('info', `✅ ${EXTENSION_NAME} v${EXTENSION_VERSION} - Popup initialized successfully`, {
+        version: EXTENSION_VERSION,
+        isAuthenticated: this.isAuthenticated
+      });
     } catch (error) {
       log('error', 'Failed to initialize popup:', error);
       this.showError('Failed to initialize popup');
@@ -394,7 +401,9 @@ class PopupController {
 
     const trackTitle = document.getElementById('trackTitle');
     if (trackTitle) {
-      trackTitle.textContent = track.title || 'Unknown Title';
+      const title = track.title || 'Unknown Title';
+      const isPlaying = additionalInfo?.isPlaying ?? true;
+      trackTitle.textContent = isPlaying ? title : `⏸️ ${title}`;
     }
 
     const trackArtist = document.getElementById('trackArtist');
@@ -530,7 +539,8 @@ class PopupController {
 
     if (!isPlaying) {
       statusIcon.textContent = '⏸️';
-      statusText.textContent = 'Paused';
+      const playProgress = duration > 0 ? Math.round((currentTime / duration) * 100) : 0;
+      statusText.textContent = `Paused (${playProgress}% played)`;
     } else if (duration < minLength) {
       statusIcon.textContent = '⏱️';
       statusText.textContent = 'Track too short to scrobble';

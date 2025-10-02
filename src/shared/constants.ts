@@ -3,7 +3,7 @@
  */
 
 export const EXTENSION_NAME = 'Madrak';
-export const EXTENSION_VERSION = '0.4.2';
+export const EXTENSION_VERSION = '0.4.3';
 
 // Chrome extension storage keys
 export const STORAGE_KEYS = {
@@ -23,8 +23,8 @@ export const YOUTUBE_MUSIC_SELECTORS = {
   ALBUM_NAME: 'ytmusic-player-bar .subtitle, ytmusic-player-bar .byline .secondary-text',
   
   // Player controls
-  PLAY_BUTTON: 'ytmusic-play-button-renderer[state="paused"]',
-  PAUSE_BUTTON: 'ytmusic-play-button-renderer[state="playing"]',
+  PLAY_BUTTON: 'ytmusic-play-button-renderer[state="paused"], [play-button-state="paused"]',
+  PAUSE_BUTTON: 'ytmusic-play-button-renderer[state="playing"], [play-button-state="playing"]',
   PLAYER_BAR: 'ytmusic-player-bar',
   
   // Time information - updated with better fallback selectors

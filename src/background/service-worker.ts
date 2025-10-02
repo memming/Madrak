@@ -3,7 +3,7 @@
  */
 
 import { Message, Track, ExtensionSettings, YouTubeMusicTrack } from '../shared/types';
-import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants';
+import { MESSAGE_TYPES, STORAGE_KEYS, EXTENSION_NAME, EXTENSION_VERSION } from '../shared/constants';
 import { getSettings, log, debug, info, showNotification } from '../shared/utils';
 import { initializeLogger, logSystemInfo } from '../shared/logger';
 import { AuthManager } from '../api/auth';
@@ -37,7 +37,11 @@ class BackgroundService {
    */
   private async initialize(): Promise<void> {
     try {
-      info('Initializing background service');
+      info(`🚀 ${EXTENSION_NAME} v${EXTENSION_VERSION} - Initializing background service`, {
+        version: EXTENSION_VERSION,
+        name: EXTENSION_NAME,
+        timestamp: new Date().toISOString()
+      });
       
       // Load settings
       this.settings = await getSettings();
@@ -82,7 +86,11 @@ class BackgroundService {
         debug('User not authenticated, scrobbler not initialized');
       }
       
-      info('Background service initialized successfully');
+      info(`✅ ${EXTENSION_NAME} v${EXTENSION_VERSION} - Background service initialized successfully`, {
+        version: EXTENSION_VERSION,
+        isAuthenticated: this.authManager.isAuthenticated(),
+        hasScrobbler: !!this.scrobbler
+      });
     } catch (err) {
       log('error', 'Failed to initialize background service', {
         error: err instanceof Error ? err.message : String(err),
