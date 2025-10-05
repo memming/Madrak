@@ -565,28 +565,22 @@ export class YouTubeMusicDetector {
    */
   private handleTrackChanged(track: YouTubeMusicTrack): void {
     log('info', `Track changed: ${track.artist} - ${track.title}`);
-    this.scrobbleSubmitted = false; // Reset the flag for the new track
 
-    const newTrackData = {
-      track: convertYouTubeTrack(track),
-      youtubeTrack: track,
-    };
-
-    let endedTrackData = null;
+    // Scrobble the previous track if it exists
     if (this.currentTrack) {
-      const convertedOldTrack = convertYouTubeTrack(this.currentTrack);
-      endedTrackData = {
-        track: convertedOldTrack,
-        youtubeTrack: this.currentTrack,
-        playDuration: this.currentTrack.currentTime,
-      };
+      this.checkForScrobble();
     }
 
+    // Reset the scrobble submission flag for the new track
+    this.scrobbleSubmitted = false;
+
+    // Send a TRACK_DETECTED message for the new track
     this.sendMessage({
-      type: 'TRACK_CHANGED',
+      type: MESSAGE_TYPES.TRACK_DETECTED,
       data: {
-        newTrack: newTrackData,
-        endedTrack: endedTrackData,
+        track: convertYouTubeTrack(track),
+        youtubeTrack: track,
+        isNowPlaying: track.isPlaying,
       },
     });
 

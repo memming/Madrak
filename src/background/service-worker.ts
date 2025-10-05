@@ -130,9 +130,6 @@ class BackgroundService {
         case MESSAGE_TYPES.TRACK_ENDED:
           this.handleTrackEnded(message.data);
           break;
-        case 'TRACK_CHANGED':
-          this.handleTrackChanged(message.data, sender);
-          break;
         case MESSAGE_TYPES.AUTH_SUCCESS:
           this.handleAuthSuccess(message.data);
           break;
@@ -178,18 +175,6 @@ class BackgroundService {
     });
 
     return true;
-  }
-
-  /**
-   * Handle track changed message
-   */
-  private async handleTrackChanged(data: any, sender: chrome.runtime.MessageSender): Promise<void> {
-    if (data.endedTrack) {
-      await this.handleTrackEnded(data.endedTrack);
-    }
-    if (data.newTrack) {
-      await this.handleTrackDetected(data.newTrack, sender);
-    }
   }
 
   /**
