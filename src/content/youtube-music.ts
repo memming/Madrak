@@ -549,9 +549,23 @@ export class YouTubeMusicDetector {
     // If the same track is being played again, it's a change.
     // This is detected by a significant jump backwards in time (e.g. replay or seek).
     // A threshold of 5 seconds is used to avoid minor fluctuations.
-    if (newTrack.isPlaying && this.currentTrack.currentTime > newTrack.currentTime + 5) {
+    // REMOVED: newTrack.isPlaying requirement - detect time jumps even when paused
+    if (this.currentTrack.currentTime > newTrack.currentTime + 5) {
       debug('Track replayed or seeked backwards', {
         previousTime: this.currentTrack.currentTime,
+        newTime: newTrack.currentTime,
+      });
+      return true;
+    }
+
+    // Detect if track has completed and restarted
+    // If we were near the end (within 5 seconds) and now we're at the beginning (< 5 seconds)
+    if (this.currentTrack.duration > 0 && 
+        this.currentTrack.currentTime >= this.currentTrack.duration - 5 &&
+        newTrack.currentTime < 5) {
+      debug('Track completed and restarted', {
+        previousTime: this.currentTrack.currentTime,
+        duration: this.currentTrack.duration,
         newTime: newTrack.currentTime,
       });
       return true;
@@ -645,6 +659,8 @@ export class YouTubeMusicDetector {
       log('info', 'Track ended');
       this.checkForScrobble();
       this.currentTrack = null;
+      // Reset the scrobble flag so the same track can be scrobbled if replayed
+      this.scrobbleSubmitted = false;
     }
   }
 

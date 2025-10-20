@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Track replay detection now works even when paused
+- Track completion and restart detection for looping tracks
+- Same track can now be scrobbled multiple times when replayed
+
+### Changed
+- Improved track change detection logic to handle more edge cases
+- Better handling of backward time jumps regardless of play state
+
 ## [0.3.1] - 2025-01-15
 
 ### Added
