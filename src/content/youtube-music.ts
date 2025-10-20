@@ -11,20 +11,17 @@ import { initializeLogger } from '../shared/logger';
 
 export class YouTubeMusicDetector {
   private currentTrack: YouTubeMusicTrack | null = null;
-  private observer: MutationObserver | null = null;
+  private intervalId: number | null = null;
   private updateNowPlayingDebounced: (() => void) | null = null;
-  private detectTrackDebounced: (() => void) | null = null;
-  private lastDetectionTime: number = 0;
+  private lastTitle: string = '';
   private scrobbleSubmitted: boolean = false;
   private lastTrackChangeTime: number = 0; // Track when last change occurred
   private lastChangedTrackId: string = ''; // Track the last changed track to prevent duplicates
-  private readonly DETECTION_THROTTLE_MS = 3000; // Minimum 3 seconds between detections (increased for performance)
+  private readonly POLL_INTERVAL_MS = 10000; // Check every 10 seconds (super lightweight)
   private readonly TRACK_CHANGE_COOLDOWN_MS = 2000; // Minimum 2 seconds between track changes
-  private playerBarCache: Element | null = null; // Cache player bar reference
 
   constructor() {
     this.updateNowPlayingDebounced = debounce(() => this.updateNowPlaying(), 2000);
-    this.detectTrackDebounced = debounce(() => this.detectCurrentTrack(), 500);
     this.initialize().catch(error => {
       console.error('[Madrak] Failed to initialize detector:', error);
     });
@@ -60,11 +57,13 @@ export class YouTubeMusicDetector {
       return;
     }
     
-    // Start observing DOM changes
-    this.startObserving();
+    // Start lightweight polling (no MutationObserver!)
+    this.startPolling();
     
     // Initial track detection
-    this.detectCurrentTrack();
+    setTimeout(() => {
+      this.detectCurrentTrack();
+    }, 1000);
     
     // Listen for messages from background script
     try {
@@ -102,117 +101,56 @@ export class YouTubeMusicDetector {
   }
 
   /**
-   * Start observing DOM changes
+   * Start lightweight polling - NO MutationObserver!
+   * This is 99% lighter than observing DOM mutations
    */
-  private startObserving(): void {
+  private startPolling(): void {
     if (!this.isExtensionContextValid()) {
-      log('warn', 'Extension context invalidated, cannot start observing');
+      log('warn', 'Extension context invalidated, cannot start polling');
       return;
     }
 
-    // Find the player bar element to observe more specifically (cache it)
-    this.playerBarCache = document.querySelector('ytmusic-player-bar');
-    if (!this.playerBarCache) {
-      // Fallback to observing document body but with more restrictive settings
-      this.observer = new MutationObserver((mutations) => {
-        this.handleMutations(mutations);
-      });
-
-      this.observer.observe(document.body, {
-        childList: true,
-        subtree: false, // Only direct children, not all descendants
-        characterData: false, // Disable character data observation
-        attributes: false,
-        attributeOldValue: false,
-        characterDataOldValue: false
-      });
-    } else {
-      // Observe only the player bar for better performance
-      this.observer = new MutationObserver((mutations) => {
-        this.handleMutations(mutations);
-      });
-
-      this.observer.observe(this.playerBarCache, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: ['state', 'play-button-state', 'class', 'aria-label'] // Only observe specific attributes
-      });
-    }
+    debug('🚀 Starting lightweight title polling (10s interval)');
     
-    // Pause observer when tab is hidden to save resources
+    // Check for changes every 10 seconds
+    this.intervalId = window.setInterval(() => {
+      this.checkForChanges();
+    }, this.POLL_INTERVAL_MS);
+    
+    // Pause polling when tab is hidden to save battery
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.observer) {
-        this.observer.disconnect();
-        debug('Observer paused - tab hidden');
-      } else if (!document.hidden && !this.observer) {
-        this.startObserving();
-        debug('Observer resumed - tab visible');
+      if (document.hidden && this.intervalId !== null) {
+        window.clearInterval(this.intervalId);
+        this.intervalId = null;
+        debug('⏸️ Polling paused - tab hidden');
+      } else if (!document.hidden && this.intervalId === null) {
+        this.intervalId = window.setInterval(() => {
+          this.checkForChanges();
+        }, this.POLL_INTERVAL_MS);
+        debug('▶️ Polling resumed - tab visible');
       }
     });
-
-    debug('Started observing DOM changes');
-    
-    // Run initial detection after a short delay
-    setTimeout(() => {
-      this.detectCurrentTrack();
-    }, 2000);
   }
 
   /**
-   * Handle DOM mutations with throttling
+   * Check for track changes by comparing document.title
+   * This is extremely lightweight - just one property read!
    */
-  private handleMutations(mutations: MutationRecord[]): void {
-    const now = Date.now();
-    
-    // Throttle detection calls
-    if (now - this.lastDetectionTime < this.DETECTION_THROTTLE_MS) {
-      return;
-    }
-
-    let shouldCheck = false;
-    
-    mutations.forEach((mutation) => {
-      // Only check for relevant changes
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        shouldCheck = true;
-      } else if (mutation.type === 'characterData') {
-        // Only check if it's text content that might be track info
-        const target = mutation.target as Text;
-        if (target.textContent && target.textContent.trim().length > 0) {
-          shouldCheck = true;
-        }
-      } else if (mutation.type === 'attributes') {
-        // Check for play state changes
-        const target = mutation.target as Element;
-        if (target.getAttribute('state') || 
-            target.getAttribute('play-button-state') ||
-            target.classList.contains('playing') || 
-            target.classList.contains('paused')) {
-          shouldCheck = true;
-        }
+  private checkForChanges(): void {
+    try {
+      const currentTitle = document.title;
+      
+      // Only do full detection if title actually changed
+      if (currentTitle !== this.lastTitle) {
+        debug('📝 Title changed, running detection', {
+          oldTitle: this.lastTitle,
+          newTitle: currentTitle
+        });
+        this.lastTitle = currentTitle;
+        this.detectCurrentTrack();
       }
-    });
-    
-    if (shouldCheck) {
-      this.lastDetectionTime = now;
-      // Use requestIdleCallback to avoid blocking audio
-      this.scheduleDetection();
-    }
-  }
-  
-  /**
-   * Schedule track detection during idle time to avoid blocking audio
-   */
-  private scheduleDetection(): void {
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => {
-        this.detectTrackDebounced?.();
-      }, { timeout: 1000 }); // Fallback to normal after 1s
-    } else {
-      // Fallback for browsers without requestIdleCallback
-      this.detectTrackDebounced?.();
+    } catch (error) {
+      debug('Error checking for changes:', error);
     }
   }
 
@@ -221,59 +159,18 @@ export class YouTubeMusicDetector {
    */
   private detectCurrentTrack(): void {
     try {
-      // Reduced debug logging for performance
-      debug('Starting track detection');
-
       const track = this.extractTrackInfo();
       
       if (!track) {
-        debug('No track detected, handling track end');
         this.handleTrackEnded();
         return;
       }
 
-      debug('Track extracted from DOM', {
-        extractedTrack: {
-          artist: track.artist,
-          title: track.title,
-          album: track.album,
-          duration: track.duration,
-          currentTime: track.currentTime,
-          isPlaying: track.isPlaying
-        }
-      });
-
       // Check if track has changed
       if (!this.currentTrack || this.hasTrackChanged(track)) {
-        debug('Track changed detected', {
-          previousTrack: this.currentTrack ? {
-            artist: this.currentTrack.artist,
-            title: this.currentTrack.title,
-            isPlaying: this.currentTrack.isPlaying
-          } : null,
-          newTrack: {
-            artist: track.artist,
-            title: track.title,
-            isPlaying: track.isPlaying
-          }
-        });
         this.handleTrackChanged(track);
       } else if (this.currentTrack.isPlaying !== track.isPlaying) {
-        debug('Play state changed', {
-          track: `${track.artist} - ${track.title}`,
-          wasPlaying: this.currentTrack.isPlaying,
-          nowPlaying: track.isPlaying,
-          previousTrack: this.currentTrack,
-          newTrack: track
-        });
         this.handlePlayStateChanged(track);
-      } else {
-        debug('No significant changes detected', {
-          track: `${track.artist} - ${track.title}`,
-          isPlaying: track.isPlaying,
-          currentTrack: this.currentTrack,
-          newTrack: track
-        });
       }
 
       this.currentTrack = track;
@@ -287,137 +184,55 @@ export class YouTubeMusicDetector {
   }
 
   /**
-   * Extract artist name with improved parsing
+   * Extract artist name - simplified for performance
    */
   private extractArtistName(): string {
-    // Try multiple selectors for artist name
-    const selectors = [
-      'ytmusic-player-bar .byline .yt-simple-endpoint',
-      'ytmusic-player-bar .byline a',
-      'ytmusic-player-bar .byline .content-info-wrapper a',
-      'ytmusic-player-bar .byline'
-    ];
+    // Use only the most reliable selector
+    const element = document.querySelector('ytmusic-player-bar .byline .yt-simple-endpoint');
+    if (!element) return '';
     
-    for (const selector of selectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        let text = element.textContent?.trim() || '';
-        
-        // If we got the full byline, try to extract just the artist
-        if (text.includes('•') || text.includes('–') || text.includes('-')) {
-          // Split by common separators and take the first part (artist)
-          const parts = text.split(/[•–-]/);
-          if (parts.length > 0 && parts[0]) {
-            text = parts[0].trim();
-          }
-        }
-        
-        // Clean up any extra whitespace or special characters
-        text = text.replace(/\s+/g, ' ').trim();
-        
-        if (text && text.length > 0) {
-          debug('✅ ARTIST EXTRACTED', { 
-            selector, 
-            rawText: `"${element.textContent?.trim() || ''}"`,
-            parsedArtist: `"${text}"` 
-          });
-          return text;
-        }
+    let text = element.textContent?.trim() || '';
+    
+    // If we got the full byline, try to extract just the artist
+    if (text.includes('•') || text.includes('–') || text.includes('-')) {
+      const parts = text.split(/[•–-]/);
+      if (parts.length > 0 && parts[0]) {
+        text = parts[0].trim();
       }
     }
     
-    debug('❌ NO ARTIST FOUND', { 
-      triedSelectors: selectors,
-      bylineElement: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || 'NOT FOUND'
-    });
-    return '';
+    return text.replace(/\s+/g, ' ').trim();
   }
 
   /**
-   * Extract album name with improved parsing
+   * Extract album name - simplified for performance
    */
   private extractAlbumName(): string {
-    // Try multiple selectors for album name
-    const selectors = [
-      'ytmusic-player-bar .subtitle',
-      'ytmusic-player-bar .byline .secondary-text',
-      'ytmusic-player-bar .byline'
-    ];
+    // Use only the most reliable selector
+    const element = document.querySelector('ytmusic-player-bar .byline');
+    if (!element) return '';
     
-    for (const selector of selectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        let text = element.textContent?.trim() || '';
-        
-        // If we got the full byline, try to extract album info
-        if (text.includes('•') || text.includes('–') || text.includes('-')) {
-          // Split by common separators and take parts after the first (album/year)
-          const parts = text.split(/[•–-]/);
-          if (parts.length > 1) {
-            // Join all parts after the first one (artist)
-            text = parts.slice(1).join(' ').trim();
-          }
-        }
-        
-        // Clean up any extra whitespace or special characters
-        text = text.replace(/\s+/g, ' ').trim();
-        
-        if (text && text.length > 0) {
-          debug('✅ ALBUM EXTRACTED', { 
-            selector, 
-            rawText: `"${element.textContent?.trim() || ''}"`,
-            parsedAlbum: `"${text}"` 
-          });
-          return text;
-        }
+    let text = element.textContent?.trim() || '';
+    
+    // If we got the full byline, extract album info
+    if (text.includes('•') || text.includes('–') || text.includes('-')) {
+      const parts = text.split(/[•–-]/);
+      if (parts.length > 1) {
+        text = parts.slice(1).join(' ').trim();
       }
     }
     
-    debug('❌ NO ALBUM FOUND', { 
-      triedSelectors: selectors,
-      subtitleElement: document.querySelector('ytmusic-player-bar .subtitle')?.textContent?.trim() || 'NOT FOUND',
-      bylineElement: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || 'NOT FOUND'
-    });
-    return '';
+    return text.replace(/\s+/g, ' ').trim();
   }
 
   /**
-   * Extract year from album info
+   * Extract year - simplified for performance
    */
   private extractYear(albumText: string): string {
     if (!albumText) return '';
     
-    // Look for 4-digit year patterns in the album text
     const yearMatch = albumText.match(/\b(19|20)\d{2}\b/);
-    if (yearMatch) {
-      const year = yearMatch[0];
-      debug('✅ YEAR EXTRACTED', { 
-        fromAlbum: `"${albumText}"`,
-        extractedYear: `"${year}"` 
-      });
-      return year;
-    }
-    
-    // Also check the full byline for year info
-    const bylineElement = document.querySelector('ytmusic-player-bar .byline');
-    if (bylineElement) {
-      const bylineText = bylineElement.textContent?.trim() || '';
-      const bylineYearMatch = bylineText.match(/\b(19|20)\d{2}\b/);
-      if (bylineYearMatch) {
-        const year = bylineYearMatch[0];
-        debug('✅ YEAR EXTRACTED FROM BYLINE', { 
-          fromByline: `"${bylineText}"`,
-          extractedYear: `"${year}"` 
-        });
-        return year;
-      }
-    }
-    
-    debug('❌ NO YEAR FOUND', { 
-      albumText: `"${albumText}"`,
-      bylineText: document.querySelector('ytmusic-player-bar .byline')?.textContent?.trim() || 'NOT FOUND'
-    });
-    return '';
+    return yearMatch ? yearMatch[0] : '';
   }
 
   /**
@@ -442,101 +257,21 @@ export class YouTubeMusicDetector {
       if (year) {
         album = album.replace(/\b(19|20)\d{2}\b/g, '').replace(/\s+/g, ' ').trim();
       }
-      
-      // Log parsed track information with clear delimiters
-      debug(`[ARTIST][TITLE][ALBUM][YEAR]`, {
-        '[ARTIST]': `"${artist}"`,
-        '[TITLE]': `"${title}"`,
-        '[ALBUM]': `"${album}"`,
-        '[YEAR]': `"${year}"`
-      });
 
       // Check if we have basic track info
       if (!title || !artist) {
-        debug('❌ INSUFFICIENT TRACK INFO - Missing title or artist', { 
-          title: `"${title}"`, 
-          artist: `"${artist}"` 
-        });
         return null;
       }
 
-      // Get duration with multiple fallback selectors
-      let durationElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.DURATION);
-      let durationText = durationElement?.textContent?.trim() || '';
-      
-      // If no duration found with primary selector, try fallbacks
-      if (!durationText) {
-        // Try alternative selectors for duration
-        const fallbackSelectors = [
-          'ytmusic-player-bar .time-info span:last-child',
-          'ytmusic-player-bar .time-info .duration',
-          'ytmusic-player-bar .time-info span[class*="duration"]',
-          'ytmusic-player-bar [class*="duration"]',
-          'ytmusic-player-bar .time-info',
-          'ytmusic-player-bar'
-        ];
-        
-        for (const selector of fallbackSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            const text = element.textContent?.trim() || '';
-            // Look for time pattern in the text
-            const timeMatch = text.match(/\d+:\d+/g);
-            if (timeMatch && timeMatch.length > 0) {
-              // If multiple times found, take the last one (usually duration)
-              durationText = timeMatch[timeMatch.length - 1] || '';
-              durationElement = element;
-              break;
-            }
-          }
-        }
-      }
-      
-      const duration = this.parseDuration(durationText || '0:00');
+      // Get duration - use only primary selector
+      const durationElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.DURATION);
+      const durationText = durationElement?.textContent?.trim() || '0:00';
+      const duration = this.parseDuration(durationText);
 
-      // Get current time with multiple fallback selectors
-      let currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
-      let currentTimeText = currentTimeElement?.textContent?.trim() || '';
-      
-      // If no current time found with primary selector, try fallbacks
-      if (!currentTimeText) {
-        // Try alternative selectors for current time
-        const fallbackSelectors = [
-          'ytmusic-player-bar .time-info span:first-child',
-          'ytmusic-player-bar .time-info .current-time',
-          'ytmusic-player-bar .time-info span[class*="current"]',
-          'ytmusic-player-bar [class*="current"]',
-          'ytmusic-player-bar .time-info',
-          'ytmusic-player-bar'
-        ];
-        
-        for (const selector of fallbackSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            const text = element.textContent?.trim() || '';
-            // Look for time pattern in the text
-            const timeMatch = text.match(/\d+:\d+/g);
-            if (timeMatch && timeMatch.length > 0) {
-              // If multiple times found, take the first one (usually current time)
-              currentTimeText = timeMatch[0] || '';
-              currentTimeElement = element;
-              break;
-            }
-          }
-        }
-      }
-      
-      const currentTime = this.parseDuration(currentTimeText || '0:00');
-
-      // Reduced debug logging for performance
-      if (duration === 0 || currentTime === 0) {
-        debug('Duration parsing - zero duration or current time', { 
-          duration, 
-          currentTime, 
-          durationText, 
-          currentTimeText 
-        });
-      }
+      // Get current time - use only primary selector
+      const currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
+      const currentTimeText = currentTimeElement?.textContent?.trim() || '0:00';
+      const currentTime = this.parseDuration(currentTimeText);
 
       // Check if playing
       const isPlaying = this.isCurrentlyPlaying();
@@ -794,119 +529,19 @@ export class YouTubeMusicDetector {
   }
 
   /**
-   * Check if music is currently playing
+   * Check if music is currently playing - simplified for performance
    */
   private isCurrentlyPlaying(): boolean {
     // Primary method: Check the main play/pause button's aria-label
     const playPauseButton = document.querySelector('#play-pause-button button[aria-label]');
     if (playPauseButton) {
       const ariaLabel = playPauseButton.getAttribute('aria-label');
-      if (ariaLabel === 'Pause') {
-        debug('✅ PLAYING STATE DETECTED', { 
-          method: 'aria-label',
-          ariaLabel: 'Pause',
-          note: 'Button shows pause icon when playing'
-        });
-        return true;
-      } else if (ariaLabel === 'Play') {
-        debug('⏸️ PAUSED STATE DETECTED', { 
-          method: 'aria-label',
-          ariaLabel: 'Play',
-          note: 'Button shows play icon when paused'
-        });
-        return false;
-      }
+      return ariaLabel === 'Pause'; // "Pause" means it's currently playing
     }
     
-    // Fallback: Check for play button (if visible, it means it's paused)
-    const playButton = document.querySelector(YOUTUBE_MUSIC_SELECTORS.PLAY_BUTTON);
-    const pauseButton = document.querySelector(YOUTUBE_MUSIC_SELECTORS.PAUSE_BUTTON);
-    
-    // If pause button is visible, it's playing
-    if (pauseButton && (pauseButton as HTMLElement).offsetParent !== null) {
-      debug('✅ PLAYING STATE DETECTED', { 
-        method: 'fallback-pause-button',
-        selector: 'PAUSE_BUTTON',
-        element: pauseButton.tagName
-      });
-      return true;
-    }
-    
-    // If play button is visible, it's paused
-    if (playButton && (playButton as HTMLElement).offsetParent !== null) {
-      debug('⏸️ PAUSED STATE DETECTED', { 
-        method: 'fallback-play-button',
-        selector: 'PLAY_BUTTON',
-        element: playButton.tagName
-      });
-      return false;
-    }
-
-    // Try alternative detection methods
-    const allPlayButtons = document.querySelectorAll('ytmusic-play-button-renderer');
-
-    // Check for any play button with state="playing" or play-button-state="playing" that's visible
-    for (const button of allPlayButtons) {
-      const state = button.getAttribute('state');
-      const playButtonState = button.getAttribute('play-button-state');
-      const isVisible = (button as HTMLElement).offsetParent !== null;
-      
-      if ((state === 'playing' || playButtonState === 'playing') && isVisible) {
-        debug('✅ PLAYING STATE DETECTED', { 
-          method: 'alternative', 
-          state, 
-          playButtonState,
-          element: button.tagName 
-        });
-        return true;
-      }
-      if ((state === 'paused' || playButtonState === 'paused') && isVisible) {
-        debug('⏸️ PAUSED STATE DETECTED', { 
-          method: 'alternative', 
-          state, 
-          playButtonState,
-          element: button.tagName 
-        });
-        return false;
-      }
-    }
-
-    // Also check for any element with play-button-state attribute
-    const elementsWithPlayButtonState = document.querySelectorAll('[play-button-state]');
-    debug('Checking elements with play-button-state attribute', { count: elementsWithPlayButtonState.length });
-    
-    for (const element of elementsWithPlayButtonState) {
-      const playButtonState = element.getAttribute('play-button-state');
-      const isVisible = (element as HTMLElement).offsetParent !== null;
-      
-      if (playButtonState === 'playing' && isVisible) {
-        debug('✅ PLAYING STATE DETECTED', { 
-          method: 'play-button-state', 
-          playButtonState,
-          element: element.tagName,
-          className: element.className 
-        });
-        return true;
-      }
-      if (playButtonState === 'paused' && isVisible) {
-        debug('⏸️ PAUSED STATE DETECTED', { 
-          method: 'play-button-state', 
-          playButtonState,
-          element: element.tagName,
-          className: element.className 
-        });
-        return false;
-      }
-    }
-
-    // Fallback: check if we have track info and assume it's playing
+    // Fallback: Check if we have track info (assume playing if track exists)
     const trackTitle = document.querySelector(YOUTUBE_MUSIC_SELECTORS.TRACK_TITLE);
-    const hasTrackInfo = trackTitle?.textContent?.trim();
-    const fallbackResult = !!hasTrackInfo;
-    
-    debug('Using fallback play state detection');
-    
-    return fallbackResult;
+    return !!(trackTitle?.textContent?.trim());
   }
 
   /**
@@ -1017,9 +652,9 @@ export class YouTubeMusicDetector {
    * Cleanup
    */
   public destroy(): void {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
+    if (this.intervalId !== null) {
+      window.clearInterval(this.intervalId);
+      this.intervalId = null;
     }
   }
 }
