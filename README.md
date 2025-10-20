@@ -2,7 +2,7 @@
 
 A modern Chrome browser extension that automatically scrobbles music from YouTube Music to your Last.fm account. Named after the mystical character from Roger Zelazny's novel.
 
-**Version**: 0.4.3
+**Version**: 0.4.4
 
 ## Features
 
