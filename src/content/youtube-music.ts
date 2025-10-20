@@ -12,12 +12,14 @@ import { initializeLogger } from '../shared/logger';
 export class YouTubeMusicDetector {
   private currentTrack: YouTubeMusicTrack | null = null;
   private intervalId: number | null = null;
+  private timeUpdateIntervalId: number | null = null;
   private updateNowPlayingDebounced: (() => void) | null = null;
   private lastTitle: string = '';
   private scrobbleSubmitted: boolean = false;
   private lastTrackChangeTime: number = 0; // Track when last change occurred
   private lastChangedTrackId: string = ''; // Track the last changed track to prevent duplicates
-  private readonly POLL_INTERVAL_MS = 10000; // Check every 10 seconds (super lightweight)
+  private readonly POLL_INTERVAL_MS = 10000; // Check title every 10 seconds (lightweight)
+  private readonly TIME_UPDATE_INTERVAL_MS = 3000; // Update currentTime every 3 seconds (critical for scrobbling)
   private readonly TRACK_CHANGE_COOLDOWN_MS = 2000; // Minimum 2 seconds between track changes
 
   constructor() {
@@ -101,8 +103,9 @@ export class YouTubeMusicDetector {
   }
 
   /**
-   * Start lightweight polling - NO MutationObserver!
-   * This is 99% lighter than observing DOM mutations
+   * Start hybrid polling approach:
+   * - Title checking every 10s (lightweight)
+   * - Time updates every 3s (critical for accurate scrobbling)
    */
   private startPolling(): void {
     if (!this.isExtensionContextValid()) {
@@ -110,23 +113,42 @@ export class YouTubeMusicDetector {
       return;
     }
 
-    debug('🚀 Starting lightweight title polling (10s interval)');
+    debug('🚀 Starting hybrid polling: 10s title check + 3s time updates');
     
-    // Check for changes every 10 seconds
+    // Main polling: Check for track changes every 10 seconds
     this.intervalId = window.setInterval(() => {
       this.checkForChanges();
     }, this.POLL_INTERVAL_MS);
     
+    // Time update polling: Update currentTime every 3 seconds
+    // This is lightweight (2 DOM queries) but critical for accurate scrobbling
+    this.timeUpdateIntervalId = window.setInterval(() => {
+      this.updateCurrentTime();
+    }, this.TIME_UPDATE_INTERVAL_MS);
+    
     // Pause polling when tab is hidden to save battery
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.intervalId !== null) {
-        window.clearInterval(this.intervalId);
-        this.intervalId = null;
+      if (document.hidden) {
+        if (this.intervalId !== null) {
+          window.clearInterval(this.intervalId);
+          this.intervalId = null;
+        }
+        if (this.timeUpdateIntervalId !== null) {
+          window.clearInterval(this.timeUpdateIntervalId);
+          this.timeUpdateIntervalId = null;
+        }
         debug('⏸️ Polling paused - tab hidden');
-      } else if (!document.hidden && this.intervalId === null) {
-        this.intervalId = window.setInterval(() => {
-          this.checkForChanges();
-        }, this.POLL_INTERVAL_MS);
+      } else if (!document.hidden) {
+        if (this.intervalId === null) {
+          this.intervalId = window.setInterval(() => {
+            this.checkForChanges();
+          }, this.POLL_INTERVAL_MS);
+        }
+        if (this.timeUpdateIntervalId === null) {
+          this.timeUpdateIntervalId = window.setInterval(() => {
+            this.updateCurrentTime();
+          }, this.TIME_UPDATE_INTERVAL_MS);
+        }
         debug('▶️ Polling resumed - tab visible');
       }
     });
@@ -134,15 +156,14 @@ export class YouTubeMusicDetector {
 
   /**
    * Check for track changes by comparing document.title
-   * This is extremely lightweight - just one property read!
+   * Only runs full detection when title actually changes
    */
   private checkForChanges(): void {
     try {
       const currentTitle = document.title;
       
-      // Only do full detection if title actually changed
       if (currentTitle !== this.lastTitle) {
-        debug('📝 Title changed, running detection', {
+        debug('📝 Title changed, running full detection', {
           oldTitle: this.lastTitle,
           newTitle: currentTitle
         });
@@ -151,6 +172,55 @@ export class YouTubeMusicDetector {
       }
     } catch (error) {
       debug('Error checking for changes:', error);
+    }
+  }
+  
+  /**
+   * Update only the currentTime for the current track
+   * This is lightweight (2 DOM queries) but runs more frequently (3s)
+   * Critical for accurate scrobbling playDuration
+   */
+  private updateCurrentTime(): void {
+    if (!this.currentTrack) {
+      return; // No track playing yet
+    }
+    
+    try {
+      // Lightweight update: only get currentTime and isPlaying
+      let currentTimeText = '';
+      const currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
+      
+      if (currentTimeElement?.textContent?.trim()) {
+        currentTimeText = currentTimeElement.textContent.trim();
+      } else {
+        // Fallback
+        const timeInfoElement = document.querySelector('ytmusic-player-bar .time-info');
+        if (timeInfoElement) {
+          const timeMatches = timeInfoElement.textContent?.match(/\d+:\d+/g);
+          if (timeMatches && timeMatches.length >= 1 && timeMatches[0]) {
+            currentTimeText = timeMatches[0];
+          }
+        }
+      }
+      
+      const currentTime = this.parseDuration(currentTimeText || '0:00');
+      const isPlaying = this.isCurrentlyPlaying();
+      
+      // Update only time-related fields
+      this.currentTrack.currentTime = currentTime;
+      this.currentTrack.isPlaying = isPlaying;
+      
+      debug('⏱️ Time update', {
+        track: `${this.currentTrack.artist} - ${this.currentTrack.title}`,
+        currentTime,
+        duration: this.currentTrack.duration,
+        percentPlayed: this.currentTrack.duration > 0 
+          ? Math.round((currentTime / this.currentTrack.duration) * 100) 
+          : 0,
+        isPlaying
+      });
+    } catch (error) {
+      debug('Error updating current time:', error);
     }
   }
 
@@ -171,8 +241,20 @@ export class YouTubeMusicDetector {
         this.handleTrackChanged(track);
       } else if (this.currentTrack.isPlaying !== track.isPlaying) {
         this.handlePlayStateChanged(track);
+      } else {
+        // Track unchanged but update state (especially currentTime for scrobbling)
+        debug('Track state update', {
+          track: `${track.artist} - ${track.title}`,
+          currentTime: track.currentTime,
+          duration: track.duration,
+          isPlaying: track.isPlaying,
+          percentPlayed: track.duration > 0 
+            ? Math.round((track.currentTime / track.duration) * 100) 
+            : 0
+        });
       }
 
+      // Always update currentTrack with latest state
       this.currentTrack = track;
     } catch (err) {
       log('error', 'Failed to detect current track', {
@@ -712,6 +794,10 @@ export class YouTubeMusicDetector {
     if (this.intervalId !== null) {
       window.clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+    if (this.timeUpdateIntervalId !== null) {
+      window.clearInterval(this.timeUpdateIntervalId);
+      this.timeUpdateIntervalId = null;
     }
   }
 }
