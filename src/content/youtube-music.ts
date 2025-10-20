@@ -263,15 +263,58 @@ export class YouTubeMusicDetector {
         return null;
       }
 
-      // Get duration - use only primary selector
+      // Get duration - with smart fallback
+      let durationText = '';
       const durationElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.DURATION);
-      const durationText = durationElement?.textContent?.trim() || '0:00';
-      const duration = this.parseDuration(durationText);
+      
+      if (durationElement?.textContent?.trim()) {
+        durationText = durationElement.textContent.trim();
+      } else {
+        // Fallback: Look for time pattern in time-info area
+        const timeInfoElement = document.querySelector('ytmusic-player-bar .time-info');
+        if (timeInfoElement) {
+          const timeMatches = timeInfoElement.textContent?.match(/\d+:\d+/g);
+          if (timeMatches && timeMatches.length >= 2 && timeMatches[1]) {
+            // Usually format is "currentTime / duration" or "currentTime duration"
+            durationText = timeMatches[1]; // Take the second time as duration
+          } else if (timeMatches && timeMatches.length === 1 && timeMatches[0]) {
+            durationText = timeMatches[0];
+          }
+        }
+      }
+      
+      const duration = this.parseDuration(durationText || '0:00');
 
-      // Get current time - use only primary selector
+      // Get current time - with smart fallback
+      let currentTimeText = '';
       const currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
-      const currentTimeText = currentTimeElement?.textContent?.trim() || '0:00';
-      const currentTime = this.parseDuration(currentTimeText);
+      
+      if (currentTimeElement?.textContent?.trim()) {
+        currentTimeText = currentTimeElement.textContent.trim();
+      } else {
+        // Fallback: Look for time pattern in time-info area
+        const timeInfoElement = document.querySelector('ytmusic-player-bar .time-info');
+        if (timeInfoElement) {
+          const timeMatches = timeInfoElement.textContent?.match(/\d+:\d+/g);
+          if (timeMatches && timeMatches.length >= 1 && timeMatches[0]) {
+            // Take the first time as current time
+            currentTimeText = timeMatches[0];
+          }
+        }
+      }
+      
+      const currentTime = this.parseDuration(currentTimeText || '0:00');
+      
+      // Debug log time extraction
+      debug('Time extraction:', {
+        track: `${artist} - ${title}`,
+        durationText,
+        duration,
+        currentTimeText,
+        currentTime,
+        durationElement: durationElement?.className,
+        currentTimeElement: currentTimeElement?.className
+      });
 
       // Check if playing
       const isPlaying = this.isCurrentlyPlaying();
@@ -363,7 +406,12 @@ export class YouTubeMusicDetector {
       return;
     }
     
-    log('info', `Track changed: ${track.artist} - ${track.title}`);
+    log('info', `Track changed: ${track.artist} - ${track.title}`, {
+      duration: track.duration,
+      currentTime: track.currentTime,
+      isPlaying: track.isPlaying
+    });
+    
     this.scrobbleSubmitted = false; // Reset the flag for the new track
     this.lastTrackChangeTime = now;
     this.lastChangedTrackId = trackId;
@@ -381,6 +429,15 @@ export class YouTubeMusicDetector {
         youtubeTrack: this.currentTrack,
         playDuration: this.currentTrack.currentTime,
       };
+      
+      log('info', `Previous track ended for scrobbling consideration`, {
+        track: `${this.currentTrack.artist} - ${this.currentTrack.title}`,
+        duration: this.currentTrack.duration,
+        playDuration: this.currentTrack.currentTime,
+        percentPlayed: this.currentTrack.duration > 0 
+          ? Math.round((this.currentTrack.currentTime / this.currentTrack.duration) * 100) 
+          : 0
+      });
     }
 
     this.sendMessage({
