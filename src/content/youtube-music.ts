@@ -15,8 +15,11 @@ export class YouTubeMusicDetector {
   private updateNowPlayingDebounced: (() => void) | null = null;
   private detectTrackDebounced: (() => void) | null = null;
   private lastDetectionTime: number = 0;
-  private scrobbleSubmitted: boolean = false; // Add this line
+  private scrobbleSubmitted: boolean = false;
+  private lastTrackChangeTime: number = 0; // Track when last change occurred
+  private lastChangedTrackId: string = ''; // Track the last changed track to prevent duplicates
   private readonly DETECTION_THROTTLE_MS = 1000; // Minimum 1 second between detections
+  private readonly TRACK_CHANGE_COOLDOWN_MS = 2000; // Minimum 2 seconds between track changes
 
   constructor() {
     this.updateNowPlayingDebounced = debounce(() => this.updateNowPlaying(), 2000);
@@ -560,13 +563,19 @@ export class YouTubeMusicDetector {
 
     // Detect if track has completed and restarted
     // If we were near the end (within 5 seconds) and now we're at the beginning (< 5 seconds)
+    // ONLY if significant time has passed since last change (prevents double detection)
+    const now = Date.now();
+    const timeSinceLastChange = now - this.lastTrackChangeTime;
+    
     if (this.currentTrack.duration > 0 && 
         this.currentTrack.currentTime >= this.currentTrack.duration - 5 &&
-        newTrack.currentTime < 5) {
+        newTrack.currentTime < 5 &&
+        timeSinceLastChange > this.TRACK_CHANGE_COOLDOWN_MS) {
       debug('Track completed and restarted', {
         previousTime: this.currentTrack.currentTime,
         duration: this.currentTrack.duration,
         newTime: newTrack.currentTime,
+        timeSinceLastChange,
       });
       return true;
     }
@@ -578,8 +587,24 @@ export class YouTubeMusicDetector {
    * Handle track change
    */
   private handleTrackChanged(track: YouTubeMusicTrack): void {
+    const now = Date.now();
+    const timeSinceLastChange = now - this.lastTrackChangeTime;
+    const trackId = `${track.artist}|${track.title}`;
+    
+    // ANTI-DOUBLE-SCROBBLE: Prevent duplicate track change events within cooldown period
+    if (timeSinceLastChange < this.TRACK_CHANGE_COOLDOWN_MS && this.lastChangedTrackId === trackId) {
+      debug('BLOCKED DUPLICATE: Track change event within cooldown period', {
+        track: `${track.artist} - ${track.title}`,
+        timeSinceLastChange,
+        cooldownMs: this.TRACK_CHANGE_COOLDOWN_MS,
+      });
+      return;
+    }
+    
     log('info', `Track changed: ${track.artist} - ${track.title}`);
     this.scrobbleSubmitted = false; // Reset the flag for the new track
+    this.lastTrackChangeTime = now;
+    this.lastChangedTrackId = trackId;
 
     const newTrackData = {
       track: convertYouTubeTrack(track),
@@ -921,10 +946,20 @@ export class YouTubeMusicDetector {
 
     try {
       chrome.runtime.sendMessage(message).catch((error) => {
-        log('error', 'Failed to send message:', error);
+        // Handle disconnected port errors gracefully (common when extension reloads)
+        if (error.message && error.message.includes('disconnected port')) {
+          debug('Message failed - extension port disconnected:', message.type);
+        } else {
+          log('error', 'Failed to send message:', error);
+        }
       });
     } catch (error) {
-      log('error', 'Failed to send message - extension context invalidated:', error);
+      // Handle extension context invalidation
+      if (error instanceof Error && error.message.includes('Extension context invalidated')) {
+        debug('Extension context invalidated while sending message:', message.type);
+      } else {
+        log('error', 'Failed to send message - unexpected error:', error);
+      }
     }
   }
 

@@ -364,11 +364,23 @@ export function log(level: LogLevel, message: string, contextOrArg?: any, ...arg
   // Output to console
   if (loggerConfig.enableConsole) {
     const consoleArgs = [prefix, message];
+    
+    // Deep clone context to preserve object state at logging time
     if (context) {
-      consoleArgs.push('Context:', context);
+      try {
+        // Use structuredClone if available (modern browsers), otherwise JSON clone
+        const clonedContext = typeof structuredClone !== 'undefined' 
+          ? structuredClone(context)
+          : JSON.parse(JSON.stringify(context));
+        consoleArgs.push('Context:', clonedContext);
+      } catch (e) {
+        // Fallback to direct logging if cloning fails (e.g., circular references)
+        consoleArgs.push('Context:', context);
+      }
     }
+    
     if (logArgs.length > 0) {
-      // Convert error objects to readable strings
+      // Convert error objects and clone other objects to preserve state
       const processedArgs = logArgs.map(arg => {
         if (arg instanceof Error) {
           return {
@@ -376,6 +388,16 @@ export function log(level: LogLevel, message: string, contextOrArg?: any, ...arg
             stack: arg.stack,
             name: arg.name
           };
+        }
+        // Deep clone objects to preserve their state at logging time
+        if (arg && typeof arg === 'object') {
+          try {
+            return typeof structuredClone !== 'undefined'
+              ? structuredClone(arg)
+              : JSON.parse(JSON.stringify(arg));
+          } catch (e) {
+            return arg; // Return original if cloning fails
+          }
         }
         return arg;
       });
