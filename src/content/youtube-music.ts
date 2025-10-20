@@ -18,8 +18,9 @@ export class YouTubeMusicDetector {
   private scrobbleSubmitted: boolean = false;
   private lastTrackChangeTime: number = 0; // Track when last change occurred
   private lastChangedTrackId: string = ''; // Track the last changed track to prevent duplicates
-  private readonly DETECTION_THROTTLE_MS = 1000; // Minimum 1 second between detections
+  private readonly DETECTION_THROTTLE_MS = 3000; // Minimum 3 seconds between detections (increased for performance)
   private readonly TRACK_CHANGE_COOLDOWN_MS = 2000; // Minimum 2 seconds between track changes
+  private playerBarCache: Element | null = null; // Cache player bar reference
 
   constructor() {
     this.updateNowPlayingDebounced = debounce(() => this.updateNowPlaying(), 2000);
@@ -109,9 +110,9 @@ export class YouTubeMusicDetector {
       return;
     }
 
-    // Find the player bar element to observe more specifically
-    const playerBar = document.querySelector('ytmusic-player-bar');
-    if (!playerBar) {
+    // Find the player bar element to observe more specifically (cache it)
+    this.playerBarCache = document.querySelector('ytmusic-player-bar');
+    if (!this.playerBarCache) {
       // Fallback to observing document body but with more restrictive settings
       this.observer = new MutationObserver((mutations) => {
         this.handleMutations(mutations);
@@ -131,7 +132,7 @@ export class YouTubeMusicDetector {
         this.handleMutations(mutations);
       });
 
-      this.observer.observe(playerBar, {
+      this.observer.observe(this.playerBarCache, {
         childList: true,
         subtree: true,
         characterData: true,
@@ -139,6 +140,17 @@ export class YouTubeMusicDetector {
         attributeFilter: ['state', 'play-button-state', 'class', 'aria-label'] // Only observe specific attributes
       });
     }
+    
+    // Pause observer when tab is hidden to save resources
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.observer) {
+        this.observer.disconnect();
+        debug('Observer paused - tab hidden');
+      } else if (!document.hidden && !this.observer) {
+        this.startObserving();
+        debug('Observer resumed - tab visible');
+      }
+    });
 
     debug('Started observing DOM changes');
     
@@ -185,6 +197,21 @@ export class YouTubeMusicDetector {
     
     if (shouldCheck) {
       this.lastDetectionTime = now;
+      // Use requestIdleCallback to avoid blocking audio
+      this.scheduleDetection();
+    }
+  }
+  
+  /**
+   * Schedule track detection during idle time to avoid blocking audio
+   */
+  private scheduleDetection(): void {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        this.detectTrackDebounced?.();
+      }, { timeout: 1000 }); // Fallback to normal after 1s
+    } else {
+      // Fallback for browsers without requestIdleCallback
       this.detectTrackDebounced?.();
     }
   }
