@@ -113,18 +113,22 @@ export class YouTubeMusicDetector {
       return;
     }
 
-    debug('🚀 Starting hybrid polling: 10s title check + 3s time updates');
+    log('info', '🚀 Starting hybrid polling: 10s title check + 3s time updates');
     
     // Main polling: Check for track changes every 10 seconds
     this.intervalId = window.setInterval(() => {
       this.checkForChanges();
     }, this.POLL_INTERVAL_MS);
     
+    log('info', `✅ Title check interval started (every ${this.POLL_INTERVAL_MS}ms)`);
+    
     // Time update polling: Update currentTime every 3 seconds
     // This is lightweight (2 DOM queries) but critical for accurate scrobbling
     this.timeUpdateIntervalId = window.setInterval(() => {
       this.updateCurrentTime();
     }, this.TIME_UPDATE_INTERVAL_MS);
+    
+    log('info', `✅ Time update interval started (every ${this.TIME_UPDATE_INTERVAL_MS}ms)`);
     
     // Pause polling when tab is hidden to save battery
     document.addEventListener('visibilitychange', () => {
@@ -182,6 +186,7 @@ export class YouTubeMusicDetector {
    */
   private updateCurrentTime(): void {
     if (!this.currentTrack) {
+      debug('⏱️ Time update skipped - no current track');
       return; // No track playing yet
     }
     
@@ -207,20 +212,21 @@ export class YouTubeMusicDetector {
       const isPlaying = this.isCurrentlyPlaying();
       
       // Update only time-related fields
+      const oldTime = this.currentTrack.currentTime;
       this.currentTrack.currentTime = currentTime;
       this.currentTrack.isPlaying = isPlaying;
       
-      debug('⏱️ Time update', {
+      // Use INFO level so it's always visible
+      log('info', `⏱️ Time: ${currentTime}s / ${this.currentTrack.duration}s (${this.currentTrack.duration > 0 ? Math.round((currentTime / this.currentTrack.duration) * 100) : 0}%)`, {
         track: `${this.currentTrack.artist} - ${this.currentTrack.title}`,
         currentTime,
+        oldTime,
         duration: this.currentTrack.duration,
-        percentPlayed: this.currentTrack.duration > 0 
-          ? Math.round((currentTime / this.currentTrack.duration) * 100) 
-          : 0,
+        currentTimeText,
         isPlaying
       });
     } catch (error) {
-      debug('Error updating current time:', error);
+      log('error', 'Error updating current time:', error);
     }
   }
 
