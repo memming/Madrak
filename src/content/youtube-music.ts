@@ -113,14 +113,12 @@ export class YouTubeMusicDetector {
       return;
     }
 
-    log('info', '🚀 Starting hybrid polling: 10s title check + 3s time updates');
+    info('🚀 Starting hybrid polling: 10s title check + 3s time updates');
     
     // Main polling: Check for track changes every 10 seconds
     this.intervalId = window.setInterval(() => {
       this.checkForChanges();
     }, this.POLL_INTERVAL_MS);
-    
-    log('info', `✅ Title check interval started (every ${this.POLL_INTERVAL_MS}ms)`);
     
     // Time update polling: Update currentTime every 3 seconds
     // This is lightweight (2 DOM queries) but critical for accurate scrobbling
@@ -128,7 +126,7 @@ export class YouTubeMusicDetector {
       this.updateCurrentTime();
     }, this.TIME_UPDATE_INTERVAL_MS);
     
-    log('info', `✅ Time update interval started (every ${this.TIME_UPDATE_INTERVAL_MS}ms)`);
+    debug(`✅ Polling intervals started: title check=${this.POLL_INTERVAL_MS}ms, time update=${this.TIME_UPDATE_INTERVAL_MS}ms`);
     
     // Pause polling when tab is hidden to save battery
     document.addEventListener('visibilitychange', () => {
@@ -216,13 +214,14 @@ export class YouTubeMusicDetector {
       this.currentTrack.currentTime = currentTime;
       this.currentTrack.isPlaying = isPlaying;
       
-      // Use INFO level so it's always visible
-      log('info', `⏱️ Time: ${currentTime}s / ${this.currentTrack.duration}s (${this.currentTrack.duration > 0 ? Math.round((currentTime / this.currentTrack.duration) * 100) : 0}%)`, {
+      // Use debug level to avoid console spam
+      debug('⏱️ Time update', {
         track: `${this.currentTrack.artist} - ${this.currentTrack.title}`,
         currentTime,
-        oldTime,
         duration: this.currentTrack.duration,
-        currentTimeText,
+        percentPlayed: this.currentTrack.duration > 0 
+          ? Math.round((currentTime / this.currentTrack.duration) * 100) 
+          : 0,
         isPlaying
       });
     } catch (error) {
