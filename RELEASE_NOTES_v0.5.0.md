@@ -13,7 +13,7 @@ This release fixes **two critical issues** that were preventing Madrak from work
 
 ## 🔥 Critical Fixes
 
-### Scrobbling Now Works
+### Scrobbling Broke but Now Works Again!
 **Problem**: Tracks were being detected but never scrobbled to Last.fm.
 
 **Root Cause**: The 10-second polling interval only updated track metadata when the title changed, leaving `currentTime` stale. When a track ended, we sent the old `currentTime` (e.g., 6 seconds) instead of the actual play time (e.g., 180 seconds). Last.fm requires 50% play time to scrobble, so all scrobbles failed.
