@@ -210,7 +210,6 @@ export class YouTubeMusicDetector {
       const isPlaying = this.isCurrentlyPlaying();
       
       // Update only time-related fields
-      const oldTime = this.currentTrack.currentTime;
       this.currentTrack.currentTime = currentTime;
       this.currentTrack.isPlaying = isPlaying;
       
