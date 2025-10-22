@@ -11,6 +11,7 @@ import { initializeLogger } from '../shared/logger';
 
 export class YouTubeMusicDetector {
   private currentTrack: YouTubeMusicTrack | null = null;
+  private lastTrackSnapshot: YouTubeMusicTrack | null = null; // Snapshot of last track state for scrobbling
   private intervalId: number | null = null;
   private timeUpdateIntervalId: number | null = null;
   private updateNowPlayingDebounced: (() => void) | null = null;
@@ -18,8 +19,9 @@ export class YouTubeMusicDetector {
   private scrobbleSubmitted: boolean = false;
   private lastTrackChangeTime: number = 0; // Track when last change occurred
   private lastChangedTrackId: string = ''; // Track the last changed track to prevent duplicates
+  private contextInvalidated: boolean = false; // Track if extension context has been invalidated
   private readonly POLL_INTERVAL_MS = 10000; // Check title every 10 seconds (lightweight)
-  private readonly TIME_UPDATE_INTERVAL_MS = 3000; // Update currentTime every 3 seconds (critical for scrobbling)
+  private readonly TIME_UPDATE_INTERVAL_MS = 1000; // Update currentTime every 1 second (critical for accurate scrobbling)
   private readonly TRACK_CHANGE_COOLDOWN_MS = 2000; // Minimum 2 seconds between track changes
 
   constructor() {
@@ -105,22 +107,22 @@ export class YouTubeMusicDetector {
   /**
    * Start hybrid polling approach:
    * - Title checking every 10s (lightweight)
-   * - Time updates every 3s (critical for accurate scrobbling)
+   * - Time updates every 1s (critical for accurate scrobbling)
    */
   private startPolling(): void {
     if (!this.isExtensionContextValid()) {
-      log('warn', 'Extension context invalidated, cannot start polling');
+      this.handleContextInvalidation();
       return;
     }
 
-    info('🚀 Starting hybrid polling: 10s title check + 3s time updates');
+    info('🚀 Starting hybrid polling: 10s title check + 1s time updates');
     
     // Main polling: Check for track changes every 10 seconds
     this.intervalId = window.setInterval(() => {
       this.checkForChanges();
     }, this.POLL_INTERVAL_MS);
     
-    // Time update polling: Update currentTime every 3 seconds
+    // Time update polling: Update currentTime every 1 second
     // This is lightweight (2 DOM queries) but critical for accurate scrobbling
     this.timeUpdateIntervalId = window.setInterval(() => {
       this.updateCurrentTime();
@@ -161,6 +163,11 @@ export class YouTubeMusicDetector {
    * Only runs full detection when title actually changes
    */
   private checkForChanges(): void {
+    // Early exit if context invalidated
+    if (this.contextInvalidated) {
+      return;
+    }
+    
     try {
       const currentTitle = document.title;
       
@@ -179,16 +186,34 @@ export class YouTubeMusicDetector {
   
   /**
    * Update only the currentTime for the current track
-   * This is lightweight (2 DOM queries) but runs more frequently (3s)
+   * This is lightweight but runs more frequently (1s)
    * Critical for accurate scrobbling playDuration
+   * Also checks for track changes to catch them faster than title polling
    */
   private updateCurrentTime(): void {
+    // Early exit if context invalidated
+    if (this.contextInvalidated) {
+      return;
+    }
+    
     if (!this.currentTrack) {
       debug('⏱️ Time update skipped - no current track');
       return; // No track playing yet
     }
     
     try {
+      // Quick check: did the title change? (lightweight, just check document.title)
+      const currentTitle = document.title;
+      if (currentTitle !== this.lastTitle) {
+        debug('⚡ Title changed detected during time update - triggering full detection', {
+          oldTitle: this.lastTitle,
+          newTitle: currentTitle
+        });
+        this.lastTitle = currentTitle;
+        this.detectCurrentTrack();
+        return; // Full detection will handle everything
+      }
+      
       // Lightweight update: only get currentTime and isPlaying
       let currentTimeText = '';
       const currentTimeElement = document.querySelector(YOUTUBE_MUSIC_SELECTORS.CURRENT_TIME);
@@ -209,9 +234,44 @@ export class YouTubeMusicDetector {
       const currentTime = this.parseDuration(currentTimeText || '0:00');
       const isPlaying = this.isCurrentlyPlaying();
       
+      // CRITICAL FIX: Verify the time makes sense before updating
+      // If currentTime jumped backwards significantly (>5s), the track likely changed
+      // Trigger full detection to handle it properly
+      if (this.currentTrack.currentTime > 0 && 
+          currentTime < this.currentTrack.currentTime - 5) {
+        debug('⚠️ Time jumped backwards - likely track changed, triggering detection', {
+          oldTime: this.currentTrack.currentTime,
+          newTime: currentTime,
+          track: `${this.currentTrack.artist} - ${this.currentTrack.title}`
+        });
+        this.detectCurrentTrack();
+        return; // Let full detection handle it
+      }
+      
+      // Only update if time is reasonable (not jumped too far forward either)
+      // Allow some tolerance for seeks but prevent corruption from new track
+      if (this.currentTrack.currentTime > 0 && 
+          currentTime > this.currentTrack.currentTime + 30) {
+        debug('⚠️ Time jumped forward significantly - possible seek or track change, triggering detection', {
+          oldTime: this.currentTrack.currentTime,
+          newTime: currentTime,
+          track: `${this.currentTrack.artist} - ${this.currentTrack.title}`
+        });
+        this.detectCurrentTrack();
+        return; // Let full detection handle it
+      }
+      
       // Update only time-related fields
       this.currentTrack.currentTime = currentTime;
       this.currentTrack.isPlaying = isPlaying;
+      
+      // CRITICAL: Take a snapshot for scrobbling purposes
+      // This preserves the accurate state even if track changes before we detect it
+      this.lastTrackSnapshot = {
+        ...this.currentTrack,
+        currentTime: currentTime,
+        isPlaying: isPlaying
+      };
       
       // Use debug level to avoid console spam
       debug('⏱️ Time update', {
@@ -241,9 +301,11 @@ export class YouTubeMusicDetector {
       }
 
       // Check if track has changed
-      if (!this.currentTrack || this.hasTrackChanged(track)) {
+      const trackHasChanged = !this.currentTrack || this.hasTrackChanged(track);
+      
+      if (trackHasChanged) {
         this.handleTrackChanged(track);
-      } else if (this.currentTrack.isPlaying !== track.isPlaying) {
+      } else if (this.currentTrack && this.currentTrack.isPlaying !== track.isPlaying) {
         this.handlePlayStateChanged(track);
       } else {
         // Track unchanged but update state (especially currentTime for scrobbling)
@@ -260,6 +322,11 @@ export class YouTubeMusicDetector {
 
       // Always update currentTrack with latest state
       this.currentTrack = track;
+      
+      // Also update snapshot for same track (full detection has complete info)
+      if (!trackHasChanged && this.currentTrack) {
+        this.lastTrackSnapshot = { ...track };
+      }
     } catch (err) {
       log('error', 'Failed to detect current track', {
         error: err instanceof Error ? err.message : String(err),
@@ -508,22 +575,34 @@ export class YouTubeMusicDetector {
     };
 
     let endedTrackData = null;
-    if (this.currentTrack) {
-      const convertedOldTrack = convertYouTubeTrack(this.currentTrack);
+    // Use lastTrackSnapshot if available (most accurate), otherwise fall back to currentTrack
+    const trackToScrobble = this.lastTrackSnapshot || this.currentTrack;
+    
+    if (trackToScrobble) {
+      const convertedOldTrack = convertYouTubeTrack(trackToScrobble);
+      
+      // Use the snapshot's currentTime as playDuration - this is the most accurate
+      // The snapshot was taken during the last time update (within 1 second)
+      const playDuration = trackToScrobble.currentTime;
+      
       endedTrackData = {
         track: convertedOldTrack,
-        youtubeTrack: this.currentTrack,
-        playDuration: this.currentTrack.currentTime,
+        youtubeTrack: trackToScrobble,
+        playDuration: playDuration,
       };
       
       log('info', `Previous track ended for scrobbling consideration`, {
-        track: `${this.currentTrack.artist} - ${this.currentTrack.title}`,
-        duration: this.currentTrack.duration,
-        playDuration: this.currentTrack.currentTime,
-        percentPlayed: this.currentTrack.duration > 0 
-          ? Math.round((this.currentTrack.currentTime / this.currentTrack.duration) * 100) 
+        track: `${trackToScrobble.artist} - ${trackToScrobble.title}`,
+        duration: trackToScrobble.duration,
+        playDuration: playDuration,
+        snapshotUsed: this.lastTrackSnapshot !== null,
+        percentPlayed: trackToScrobble.duration > 0 
+          ? Math.round((playDuration / trackToScrobble.duration) * 100) 
           : 0
       });
+      
+      // Clear the snapshot after using it
+      this.lastTrackSnapshot = null;
     }
 
     this.sendMessage({
@@ -598,8 +677,11 @@ export class YouTubeMusicDetector {
    * Check if we should scrobble the current track
    */
   private checkForScrobble(): void {
-    if (!this.currentTrack) {
-      debug('checkForScrobble: No current track to scrobble');
+    // Use snapshot if available, otherwise current track
+    const trackToScrobble = this.lastTrackSnapshot || this.currentTrack;
+    
+    if (!trackToScrobble) {
+      debug('checkForScrobble: No track to scrobble');
       return;
     }
 
@@ -609,14 +691,18 @@ export class YouTubeMusicDetector {
     }
 
     this.scrobbleSubmitted = true;
-    const convertedTrack = convertYouTubeTrack(this.currentTrack);
+    const convertedTrack = convertYouTubeTrack(trackToScrobble);
+    
+    // Use the snapshot's currentTime directly - it's the most accurate
+    const playDuration = trackToScrobble.currentTime;
     
     debug('checkForScrobble: Sending TRACK_ENDED message for scrobbling', {
       track: {
         artist: convertedTrack.artist,
         title: convertedTrack.title,
         duration: convertedTrack.duration,
-        playDuration: this.currentTrack.currentTime
+        playDuration: playDuration,
+        snapshotUsed: this.lastTrackSnapshot !== null
       }
     });
 
@@ -625,10 +711,13 @@ export class YouTubeMusicDetector {
       type: MESSAGE_TYPES.TRACK_ENDED,
       data: {
         track: convertedTrack,
-        youtubeTrack: this.currentTrack,
-        playDuration: this.currentTrack.currentTime,
+        youtubeTrack: trackToScrobble,
+        playDuration: playDuration,
       },
     });
+    
+    // Clear snapshot after use
+    this.lastTrackSnapshot = null;
   }
 
   /**
@@ -741,11 +830,31 @@ export class YouTubeMusicDetector {
   }
 
   /**
+   * Handle extension context invalidation
+   */
+  private handleContextInvalidation(): void {
+    if (this.contextInvalidated) {
+      return; // Already handled
+    }
+    
+    this.contextInvalidated = true;
+    
+    // Log once at info level
+    info('Extension context invalidated - detector will stop. Please reload the page to resume scrobbling.', {
+      url: window.location.href,
+      reason: 'Extension was reloaded or updated'
+    });
+    
+    // Stop all polling
+    this.destroy();
+  }
+
+  /**
    * Send message to background script
    */
   private sendMessage(message: Message): void {
     if (!this.isExtensionContextValid()) {
-      log('warn', 'Extension context invalidated, cannot send message:', message.type);
+      this.handleContextInvalidation();
       return;
     }
 
@@ -754,6 +863,7 @@ export class YouTubeMusicDetector {
         // Handle disconnected port errors gracefully (common when extension reloads)
         if (error.message && error.message.includes('disconnected port')) {
           debug('Message failed - extension port disconnected:', message.type);
+          this.handleContextInvalidation();
         } else {
           log('error', 'Failed to send message:', error);
         }
@@ -762,6 +872,7 @@ export class YouTubeMusicDetector {
       // Handle extension context invalidation
       if (error instanceof Error && error.message.includes('Extension context invalidated')) {
         debug('Extension context invalidated while sending message:', message.type);
+        this.handleContextInvalidation();
       } else {
         log('error', 'Failed to send message - unexpected error:', error);
       }
@@ -773,7 +884,7 @@ export class YouTubeMusicDetector {
    */
   private handleMessage(message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): void {
     if (!this.isExtensionContextValid()) {
-      log('warn', 'Extension context invalidated, ignoring message:', message.type);
+      this.handleContextInvalidation();
       sendResponse();
       return;
     }
@@ -823,10 +934,9 @@ function initializeDetector() {
 // Add global error handler for extension context invalidation
 window.addEventListener('error', (event) => {
   if (event.error && event.error.message && event.error.message.includes('Extension context invalidated')) {
-    log('warn', 'Extension context invalidated, cleaning up detector');
+    console.log('[Madrak] Extension context invalidated detected in global error handler');
     if (detector) {
-      detector.destroy();
-      detector = null;
+      detector['handleContextInvalidation']();
     }
   }
 });

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-10-22
+
+### Fixed
+- **CRITICAL: Fixed short tracks not being scrobbled** - tracks under 2-3 minutes now scrobble reliably
+- Fixed playDuration corruption when tracks change rapidly (race condition)
+- Fixed inaccurate playback time tracking for ended tracks
+- Fixed repetitive warning logs on extension reload
+- Fixed time corruption from new track data overwriting old track state
+
+### Added
+- **Track snapshot system** - preserves accurate state for scrobbling
+- Fast track change detection (1 second instead of up to 10 seconds)
+- Time jump detection to catch track changes immediately
+- Extension context invalidation handling with graceful shutdown
+- Enhanced debug logging with snapshot usage indicators
+
+### Changed
+- Time update frequency increased from 3 seconds to 1 second
+- Track change detection now runs every 1 second (was 10 seconds)
+- Simplified playDuration calculation using snapshot data
+- Improved extension reload/update handling
+
+### Performance
+- Track changes detected 10x faster (1s vs 10s)
+- More accurate playback tracking (±1s vs ±3s)
+- Minimal overhead increase (2-3 DOM queries per second)
+- Snapshot creation is lightweight (simple object copy)
+
+### Technical Details
+- New `lastTrackSnapshot` property stores clean track state
+- Snapshot updated every 1 second during playback
+- Direct use of snapshot's currentTime for playDuration
+- Immune to DOM timing issues and race conditions
+- Clean separation between active tracking and historical data
+
 ## [0.5.1] - 2025-10-21
 
 ### Changed
