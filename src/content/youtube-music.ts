@@ -16,6 +16,7 @@ export class YouTubeMusicDetector {
   private timeUpdateIntervalId: number | null = null;
   private updateNowPlayingDebounced: (() => void) | null = null;
   private lastTitle: string = '';
+  private lastPlayerBarHTML: string = '';
   private scrobbleSubmitted: boolean = false;
   private lastTrackChangeTime: number = 0; // Track when last change occurred
   private lastChangedTrackId: string = ''; // Track the last changed track to prevent duplicates
@@ -170,13 +171,18 @@ export class YouTubeMusicDetector {
     
     try {
       const currentTitle = document.title;
+      const playerBar = document.querySelector(YOUTUBE_MUSIC_SELECTORS.PLAYER_BAR);
+      const currentPlayerBarHTML = playerBar ? playerBar.innerHTML : '';
       
-      if (currentTitle !== this.lastTitle) {
-        debug('📝 Title changed, running full detection', {
+      if (currentTitle !== this.lastTitle || currentPlayerBarHTML !== this.lastPlayerBarHTML) {
+        debug('📝 Title or player bar changed, running full detection', {
           oldTitle: this.lastTitle,
-          newTitle: currentTitle
+          newTitle: currentTitle,
+          titleChanged: currentTitle !== this.lastTitle,
+          playerBarChanged: currentPlayerBarHTML !== this.lastPlayerBarHTML
         });
         this.lastTitle = currentTitle;
+        this.lastPlayerBarHTML = currentPlayerBarHTML;
         this.detectCurrentTrack();
       }
     } catch (error) {
