@@ -37,6 +37,14 @@ class BackgroundService {
    */
   private async initialize(): Promise<void> {
     try {
+      // TEMPORARY: Testing PR #11 - Persist scrobble queue updates during processing
+      console.log('🧪 [TEST BUILD] PR #11 - Testing scrobble queue persistence');
+      log('info', '🧪 [TEST BUILD] PR #11 - Testing scrobble queue persistence', {
+        pr: 11,
+        branch: 'codex/persist-queue-after-processing-steps',
+        testBuild: true
+      });
+      
       info(`🚀 ${EXTENSION_NAME} v${EXTENSION_VERSION} - Initializing background service`, {
         version: EXTENSION_VERSION,
         name: EXTENSION_NAME,

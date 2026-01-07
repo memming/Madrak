@@ -224,18 +224,20 @@ export class Scrobbler {
         try {
           await this.sendScrobble(item);
           log('info', `Successfully scrobbled: ${item.track.artist} - ${item.track.title}`);
-          await this.saveAfterDequeue();
+          await this.saveScrobbleQueue();
         } catch (error) {
           log('error', `Failed to scrobble: ${item.track.artist} - ${item.track.title}`, error);
           
           // Retry logic
           if (item.retryCount < LASTFM_CONSTANTS.MAX_RETRIES) {
             item.retryCount++;
-            await this.requeueAndSave(item);
+            this.scrobbleQueue.unshift(item); // Put back at the front
+            await this.saveScrobbleQueue();
             await sleep(LASTFM_CONSTANTS.RETRY_DELAY * item.retryCount);
           } else {
             log('error', `Max retries exceeded for: ${item.track.artist} - ${item.track.title}`);
-            await this.saveAfterDequeue();
+            // Item already removed from queue, just save current state
+            await this.saveScrobbleQueue();
           }
         }
 
@@ -247,14 +249,6 @@ export class Scrobbler {
     }
   }
 
-  private async saveAfterDequeue(): Promise<void> {
-    await this.saveScrobbleQueue();
-  }
-
-  private async requeueAndSave(item: ScrobbleQueueItem): Promise<void> {
-    this.scrobbleQueue.unshift(item);
-    await this.saveScrobbleQueue();
-  }
 
   /**
    * Send a scrobble to Last.fm
