@@ -153,7 +153,7 @@ class PopupController {
   private setupMessageListeners(): void {
     chrome.runtime.onMessage.addListener((message: Message, _sender, _sendResponse) => {
       console.log('[Madrak] Popup received message:', message.type);
-      
+
       switch (message.type) {
         case 'AUTH_SUCCESS':
           this.handleAuthSuccess(message.data);
@@ -163,6 +163,24 @@ class PopupController {
           break;
         case MESSAGE_TYPES.SETTINGS_UPDATE:
           this.handleSettingsUpdate(message.data);
+          break;
+        case MESSAGE_TYPES.TRACK_DETECTED:
+          if (this.isAuthenticated && message.data) {
+            this.showCurrentTrack(message.data.track, {
+              isPlaying: message.data.youtubeTrack?.isPlaying,
+              currentTime: message.data.youtubeTrack?.currentTime,
+              thumbnail: message.data.youtubeTrack?.thumbnail,
+            });
+          }
+          break;
+        case 'TRACK_CHANGED':
+          if (this.isAuthenticated && message.data?.newTrack) {
+            this.showCurrentTrack(message.data.newTrack.track, {
+              isPlaying: message.data.newTrack.youtubeTrack?.isPlaying,
+              currentTime: message.data.newTrack.youtubeTrack?.currentTime,
+              thumbnail: message.data.newTrack.youtubeTrack?.thumbnail,
+            });
+          }
           break;
         default:
           console.log('[Madrak] Popup: Unknown message type:', message.type);
